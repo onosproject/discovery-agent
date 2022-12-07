@@ -50,11 +50,11 @@ func (s *Server) Set(ctx context.Context, request *gnmi.SetRequest) (*gnmi.SetRe
 }
 
 // State related to a single message stream
-type streamState struct {
-	stream          gnmi.GNMI_SubscribeServer
-	req             *gnmi.SubscribeRequest
-	streamResponses chan *gnmi.SubscribeResponse
-}
+//type streamState struct {
+//	stream          gnmi.GNMI_SubscribeServer
+//	req             *gnmi.SubscribeRequest
+//	streamResponses chan *gnmi.SubscribeResponse
+//}
 
 // Subscribe allows a client to request the target to send it values
 // of particular paths within the data tree. These values may be streamed

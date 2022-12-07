@@ -3,10 +3,16 @@ module github.com/onosproject/link-agent
 go 1.17
 
 require (
+	github.com/gogo/protobuf v1.3.2
+	github.com/onosproject/fabric-sim v0.1.14
+	github.com/onosproject/onos-api/go v0.10.2
 	github.com/onosproject/onos-lib-go v0.9.3
-	github.com/openconfig/gnmi v0.0.0-20210914185457-51254b657b7d
+	github.com/onosproject/onos-net-lib v0.1.2
+	github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2
+	github.com/p4lang/p4runtime v1.4.0-rc.5
 	github.com/spf13/cobra v1.5.0
 	google.golang.org/grpc v1.47.0
+	google.golang.org/protobuf v1.28.0
 )
 
 require (
@@ -18,10 +24,10 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/ericchiang/oidc v0.0.0-20160908143337-11f62933e071 // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/gopacket v1.1.19 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -56,8 +62,6 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220608133413-ed9918b62aac // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/square/go-jose.v1 v1.1.2 // indirect
 	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
