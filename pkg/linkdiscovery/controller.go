@@ -7,10 +7,11 @@ package linkdiscovery
 
 import (
 	"context"
-	"github.com/onosproject/fabric-sim/pkg/utils"
 	"github.com/onosproject/onos-lib-go/pkg/errors"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
+	"github.com/onosproject/onos-net-lib/pkg/gnmiutils"
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
+	"github.com/onosproject/onos-net-lib/pkg/packet"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	p4api "github.com/p4lang/p4runtime/go/p4/v1"
 	"google.golang.org/grpc"
@@ -75,7 +76,7 @@ func (c *Controller) Start() {
 
 func (c *Controller) discoverPorts() error {
 	resp, err := c.gnmiClient.Get(c.ctx, &gnmi.GetRequest{
-		Path: []*gnmi.Path{utils.ToPath("interfaces/interface[name=...]/state")},
+		Path: []*gnmi.Path{gnmiutils.ToPath("interfaces/interface[name=...]/state")},
 	})
 	if err != nil {
 		return err
@@ -111,7 +112,7 @@ func (c *Controller) getPort(id string) *Port {
 
 func (c *Controller) discoverLinks() error {
 	for _, port := range c.ports {
-		lldpBytes, err := utils.ControllerLLDPPacket(c.ingressDeviceID, port.Number)
+		lldpBytes, err := packet.ControllerLLDPPacket(c.ingressDeviceID, port.Number)
 		if err != nil {
 			return err
 		}
