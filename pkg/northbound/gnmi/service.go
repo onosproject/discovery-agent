@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package fabricsim implements the northbound API of the fabric simulator
+// Package gnmi implements gNMI service for accessing discovered links
 package gnmi
 
 import (
