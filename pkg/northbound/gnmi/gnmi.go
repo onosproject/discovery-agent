@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package gnmi implements gNMI service for accessing discovered links
 package gnmi
 
 import (
