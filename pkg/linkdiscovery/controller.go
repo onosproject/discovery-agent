@@ -7,28 +7,47 @@ package linkdiscovery
 
 import (
 	"context"
-	"github.com/onosproject/onos-lib-go/pkg/errors"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-net-lib/pkg/gnmiutils"
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
 	"github.com/onosproject/onos-net-lib/pkg/packet"
 	"github.com/openconfig/gnmi/proto/gnmi"
+	p4info "github.com/p4lang/p4runtime/go/p4/config/v1"
 	p4api "github.com/p4lang/p4runtime/go/p4/v1"
 	"google.golang.org/grpc"
 	"sync"
+	"time"
 )
 
 var log = logging.GetLogger("linkdiscovery")
 
+// State represents the various states of controller lifecycle
+type State int
+
+const (
+	// Disconnected represents the default/initial state
+	Disconnected State = iota
+	// Connected represents state where Stratum connection(s) have been established
+	Connected
+	// Configured represents state where P4Info has been obtained
+	Configured
+	// Elected represents state where the link agent established mastership for its role
+	Elected
+	// PortsDiscovered represents state where the link agent discovered all Stratum ports
+	PortsDiscovered
+)
+
 // Controller represents the link discovery control
 type Controller struct {
-	targetAddress   string
-	ingressDeviceID string
+	TargetAddress   string
+	IngressDeviceID string
 
-	lock sync.RWMutex
+	state   State
+	lock    sync.RWMutex
+	running bool
 	//config *Config
 	ports map[string]*Port
-	//links  map[uint32]*Link
+	links map[uint32]*Link
 
 	ctx        context.Context
 	conn       *grpc.ClientConn
@@ -38,6 +57,8 @@ type Controller struct {
 	codec      *p4utils.ControllerMetadataCodec
 	stream     p4api.P4Runtime_StreamChannelClient
 	electionID *p4api.Uint128
+	cookie     uint64
+	info       *p4info.P4Info
 }
 
 // Config contains configuration parameters for the link discovery
@@ -61,33 +82,102 @@ type Link struct {
 }
 
 // NewController creates a new link discovery controller
-func NewController(targetAddress string) *Controller {
-	return &Controller{targetAddress: targetAddress}
+func NewController(targetAddress string, agentID string) *Controller {
+	return &Controller{
+		TargetAddress:   targetAddress,
+		IngressDeviceID: agentID,
+		ports:           make(map[string]*Port),
+		links:           make(map[uint32]*Link),
+	}
 }
 
 // Start starts the controller
 func (c *Controller) Start() {
-	log.Infof("Starting...")
-	// FIXME: temporary invocation
-	_ = c.establishDeviceConnection()
-	_ = c.discoverPorts()
-	_ = c.discoverLinks()
+	go c.run()
 }
 
-func (c *Controller) discoverPorts() error {
+// Stop stops the controller
+func (c *Controller) Stop() {
+	c.running = false
+}
+
+func (c *Controller) run() {
+	log.Infof("Started")
+	c.running = true
+	for c.running {
+		switch c.state {
+		case Disconnected:
+			c.waitForDeviceConnection()
+		case Connected:
+			c.waitForPipelineConfiguration()
+		case Configured:
+			c.waitForMastershipArbitration()
+		case Elected:
+			c.discoverPorts()
+		case PortsDiscovered:
+			c.enterLinkDiscovery()
+		}
+	}
+	log.Infof("Stopped")
+}
+
+func (c *Controller) pauseIfRunning(pause time.Duration) {
+	if c.running {
+		time.Sleep(pause)
+	}
+}
+
+func (c *Controller) enterLinkDiscovery() {
+	// Setup packet-in handler
+	go handlePackets()
+
+	// Program intercept rule(s)
+	c.programPacketInterceptRule()
+
+	tLinks := time.NewTicker(5 * time.Second)
+	tConf := time.NewTicker(60 * time.Second)
+	tPorts := time.NewTicker(60 * time.Second)
+	tPrune := time.NewTicker(2 * time.Second)
+
+	for c.running {
+		select {
+		// Periodically emit LLDP packets
+		case <-tLinks.C:
+			if err := c.emitLLDPPackets(); err != nil {
+				log.Warn("Unable to emit LLDP packets: %+v", err)
+			}
+
+		// Periodically re-discover ports
+		case <-tPorts.C:
+			c.discoverPorts()
+
+		// Periodically validate pipeline config
+		case <-tConf.C:
+			c.validatePipelineConfiguration()
+
+		// Periodically prune links
+		case <-tPrune.C:
+			c.pruneLinks()
+		}
+
+	}
+}
+
+func (c *Controller) discoverPorts() {
+	log.Infof("Discovering ports...")
 	resp, err := c.gnmiClient.Get(c.ctx, &gnmi.GetRequest{
 		Path: []*gnmi.Path{gnmiutils.ToPath("interfaces/interface[name=...]/state")},
 	})
 	if err != nil {
-		return err
+		log.Warn("Unable to issue gNMI request for port list: %+v", err)
+		return
 	}
 	if len(resp.Notification) == 0 {
-		return errors.NewInvalid("No port data received")
+		log.Warn("No port data received")
+		return
 	}
 
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.ports = make(map[string]*Port)
+	ports := make(map[string]*Port)
 	for _, update := range resp.Notification[0].Update {
 		port := c.getPort(update.Path.Elem[1].Key["name"])
 		last := len(update.Path.Elem) - 1
@@ -98,7 +188,12 @@ func (c *Controller) discoverPorts() error {
 			port.Status = update.Val.GetStringVal()
 		}
 	}
-	return nil
+
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.ports = ports
+	c.state = PortsDiscovered
+	log.Infof("Ports discovered")
 }
 
 func (c *Controller) getPort(id string) *Port {
@@ -110,9 +205,18 @@ func (c *Controller) getPort(id string) *Port {
 	return port
 }
 
-func (c *Controller) discoverLinks() error {
+func handlePackets() {
+	// TODO: implement LLDP packet handling
+}
+
+func (c *Controller) programPacketInterceptRule() {
+	// TODO: implement programming the LLDP ethType intercept
+}
+
+func (c *Controller) emitLLDPPackets() error {
+	log.Infof("Sending LLDP packets...")
 	for _, port := range c.ports {
-		lldpBytes, err := packet.ControllerLLDPPacket(c.ingressDeviceID, port.Number)
+		lldpBytes, err := packet.ControllerLLDPPacket(c.IngressDeviceID, port.Number)
 		if err != nil {
 			return err
 		}
@@ -128,5 +232,10 @@ func (c *Controller) discoverLinks() error {
 			return err
 		}
 	}
+	log.Info("LLDP packets emitted")
 	return nil
+}
+
+func (c *Controller) pruneLinks() {
+	// TODO: implement this
 }

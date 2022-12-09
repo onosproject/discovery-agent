@@ -14,4 +14,7 @@ require (
 	google.golang.org/protobuf v1.28.0
 )
 
-require github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
+require (
+	github.com/google/uuid v1.1.2
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
+)
