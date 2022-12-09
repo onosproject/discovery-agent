@@ -349,12 +349,12 @@ github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742/go.mod h1:bx2lN
 github.com/modern-go/reflect2 v1.0.1/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3RllmbCylyMrvgv0=
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
-github.com/onosproject/onos-api/go v0.10.2 h1:+LMRvwTPmoCdJUEaGDeQzeNvwM4qk70HFb6dEmd7Zj4=
-github.com/onosproject/onos-api/go v0.10.2/go.mod h1:R882+8UcxQBLpCopnnbBnemXtJ77UXnL2I1y5yHbq10=
+github.com/onosproject/onos-api/go v0.10.5 h1:zqcbXvkggxB7L+gQWPV2mP0imlp47IX58DKBaWz7I20=
+github.com/onosproject/onos-api/go v0.10.5/go.mod h1:R882+8UcxQBLpCopnnbBnemXtJ77UXnL2I1y5yHbq10=
 github.com/onosproject/onos-lib-go v0.9.3 h1:yQ52O0xucOSH+TlZHFoget+1/n6ZjgMiEHn6f/i6KEQ=
 github.com/onosproject/onos-lib-go v0.9.3/go.mod h1:ZpuQW6Kpjn12igx6njGjqr1w4KDaEg824vR2zL33kj4=
-github.com/onosproject/onos-net-lib v0.1.2 h1:rL6Hjm2SA5gKIZ4Yad694hB5Qw8P+SQNFgU/MqQamvM=
-github.com/onosproject/onos-net-lib v0.1.2/go.mod h1:O117FUlXXKUBRXuUA5FrKOuJON5U0uiq2Ze9I8RiqlI=
+github.com/onosproject/onos-net-lib v0.1.4 h1:DUXAMlSjiP60BPGnF9txsFtIQnWsEGb447tD5vwlFF0=
+github.com/onosproject/onos-net-lib v0.1.4/go.mod h1:geyAfPuvwy/2+Xs5V9k5Vb5T1sw6/l/8KbpEnO/CDwk=
 github.com/openconfig/gnmi v0.0.0-20200617225440-d2b4e6a45802/go.mod h1:M/EcuapNQgvzxo1DDXHK4tx3QpYM/uG4l591v33jG2A=
 github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2 h1:3YLlQFLDsFTvruKoYBbuYqhCgsXMtNewSrLjNXcF/Sg=
 github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2/go.mod h1:Y9os75GmSkhHw2wX8sMsxfI7qRGAEcDh8NTa5a8vj6E=
