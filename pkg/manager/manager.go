@@ -5,10 +5,12 @@
 package manager
 
 import (
+	"github.com/google/uuid"
 	"github.com/onosproject/link-agent/pkg/linkdiscovery"
 	"github.com/onosproject/link-agent/pkg/northbound/gnmi"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
+	"io/ioutil"
 )
 
 var log = logging.GetLogger("manager")
@@ -49,8 +51,11 @@ func (m *Manager) Run() {
 
 // Start initializes and starts the link controller and the NB gNMI API.
 func (m *Manager) Start() error {
+	// Load (or generate and save) our UUID
+	agentID := m.loadOrCreateUUID()
+
 	// Initialize and start the link discovery controller
-	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress)
+	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, agentID)
 	m.Controller.Start()
 
 	// Starts NB server
@@ -88,4 +93,18 @@ func (m *Manager) startNorthboundServer() error {
 // Close kills the manager
 func (m *Manager) Close() {
 	log.Infow("Closing Manager")
+}
+
+const uuidFile = "/opt/link-agent/uuid"
+
+func (m *Manager) loadOrCreateUUID() string {
+	if b, err := ioutil.ReadFile(uuidFile); err == nil {
+		return string(b)
+	}
+
+	newUUID := uuid.New().String()
+	if err := ioutil.WriteFile(uuidFile, []byte(newUUID), 0644); err != nil {
+		log.Fatalf("Unable to save UUID: %+v", err)
+	}
+	return newUUID
 }
