@@ -13,7 +13,6 @@ import (
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
 	"github.com/onosproject/onos-net-lib/pkg/packet"
 	"github.com/openconfig/gnmi/proto/gnmi"
-	p4info "github.com/p4lang/p4runtime/go/p4/config/v1"
 	p4api "github.com/p4lang/p4runtime/go/p4/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -32,7 +31,7 @@ const (
 
 func (c *Controller) waitForDeviceConnection() {
 	log.Infof("Connecting to stratum agent...")
-	for c.running {
+	for c.getState() == Disconnected {
 		opts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
@@ -43,17 +42,17 @@ func (c *Controller) waitForDeviceConnection() {
 			c.p4Client = p4api.NewP4RuntimeClient(c.conn)
 			c.gnmiClient = gnmi.NewGNMIClient(c.conn)
 			c.ctx, c.ctxCancel = context.WithCancel(context.Background())
-			c.state = Connected
+			c.setState(Connected)
 			log.Infof("Connected")
 			return
 		}
-		c.pauseIfRunning(connectionRetryPause)
+		c.pauseIf(Disconnected, connectionRetryPause)
 	}
 }
 
 func (c *Controller) waitForPipelineConfiguration() {
 	log.Infof("Retrieving pipeline configuration...")
-	for c.running {
+	for c.getState() == Connected {
 		// Ask for the pipeline config P4Infi and cookie
 		resp, err := c.p4Client.GetForwardingPipelineConfig(c.ctx, &p4api.GetForwardingPipelineConfigRequest{
 			ResponseType: p4api.GetForwardingPipelineConfigRequest_P4INFO_AND_COOKIE,
@@ -62,12 +61,12 @@ func (c *Controller) waitForPipelineConfiguration() {
 			c.cookie = resp.Config.Cookie.Cookie
 			c.info = resp.Config.P4Info
 			c.codec = p4utils.NewControllerMetadataCodec(c.info)
-			c.role = p4utils.NewStratumRole(linkAgentRoleName, c.codec.RoleAgentIDPortMetadataID(), []byte(linkAgentRoleID), true, false)
-			c.state = Configured
+			c.role = p4utils.NewStratumRole(linkAgentRoleName, c.codec.RoleAgentIDMetadataID(), []byte(linkAgentRoleID), true, false)
+			c.setState(PipelineConfigAvailable)
 			log.Infof("Pipeline configuration obtained and processed")
 			return
 		}
-		c.pauseIfRunning(pipelineFetchRetryPause)
+		c.pauseIf(Connected, pipelineFetchRetryPause)
 	}
 }
 
@@ -80,7 +79,7 @@ func (c *Controller) validatePipelineConfiguration() {
 	if err == nil {
 		// If the cookie changed, transition back to connected state
 		if c.cookie != resp.Config.Cookie.Cookie {
-			c.state = Connected
+			c.setState(Connected)
 			log.Infof("Pipeline configuration changed")
 		}
 		return
@@ -91,13 +90,16 @@ func (c *Controller) validatePipelineConfiguration() {
 func (c *Controller) waitForMastershipArbitration() {
 	log.Infof("Running mastership arbitration...")
 	var err error
-	for c.running { // Establish stream channel
+	for c.getState() == PipelineConfigAvailable {
+		// Establish stream channel
 		if c.stream, err = c.p4Client.StreamChannel(c.ctx); err == nil {
-			for c.running { // Issue mastership arbitration request
+			for c.getState() == PipelineConfigAvailable {
+				// Issue mastership arbitration request
 				c.electionID = p4utils.TimeBasedElectionID()
 				if err = c.stream.Send(p4utils.CreateMastershipArbitration(c.electionID, c.role)); err == nil {
 					var mar *p4api.MasterArbitrationUpdate
-					for c.running && mar == nil { // Wait for mastership arbitration update
+					for c.getState() == PipelineConfigAvailable && mar == nil {
+						// Wait for mastership arbitration update
 						var msg *p4api.StreamMessageResponse
 						if msg, err = c.stream.Recv(); err != nil {
 							log.Warnf("Unable to receive stream response: %+v", err)
@@ -112,14 +114,14 @@ func (c *Controller) waitForMastershipArbitration() {
 					// If we got mastership arbitration with a winning election ID matching ours, return
 					if mar != nil && mar.ElectionId != nil &&
 						mar.ElectionId.High == c.electionID.High && mar.ElectionId.Low == c.electionID.Low {
-						c.state = Elected
+						c.setState(Elected)
 						log.Infof("Obtained mastership for role: %s", linkAgentRoleName)
 						return
 					}
 				}
 			}
 		}
-		c.pauseIfRunning(mastershipArbitrationRetryPause)
+		c.pauseIf(PipelineConfigAvailable, mastershipArbitrationRetryPause)
 	}
 }
 
@@ -152,13 +154,13 @@ func (c *Controller) discoverPorts() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.ports = ports
-	c.state = PortsDiscovered
+	c.setState(PortsDiscovered)
 	log.Infof("Ports discovered")
 }
 
 func (c *Controller) handlePackets() {
 	log.Infof("Monitoring message stream")
-	for c.running && c.state == PortsDiscovered {
+	for c.getState() == PortsDiscovered {
 		msg, err := c.stream.Recv()
 		if err != nil {
 			log.Warnf("Unable to read stream response: %+v", err)
@@ -188,21 +190,26 @@ func (c *Controller) processPacket(packetIn *p4api.PacketIn) {
 }
 
 func (c *Controller) programPacketInterceptRule() {
-	aclTable := FindTable(c.info, "FabricIngress.acl.acl")
-	puntAction := FindAction(c.info, "FabricIngress.acl.punt_to_cpu")
+	aclTable := p4utils.FindTable(c.info, "FabricIngress.acl.acl")
+	puntAction := p4utils.FindAction(c.info, "FabricIngress.acl.punt_to_cpu")
 
 	if aclTable == nil {
 		log.Warnf("Unable to find FabricIngress.acl.acl table or FabricIngress.acl.punt_to_cpu action")
 		return
 	}
 
-	setAgentRoleActionParam := FindActionParam(puntAction, "set_role_agent_id")
+	ethTypeMatchField := p4utils.FindTableMatchField(aclTable, "eth_type")
+	if ethTypeMatchField == nil {
+		log.Warnf("Unable to find eth_type match field")
+	}
+
+	setAgentRoleActionParam := p4utils.FindActionParam(puntAction, "set_role_agent_id")
 	if aclTable == nil {
 		log.Warnf("Unable to find set_role_agent_id action param")
 		return
 	}
 
-	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, setAgentRoleActionParam.Id); err != nil {
+	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id); err != nil {
 		log.Warnf("Unable to install LLDP intercept rule: %+v", err)
 	}
 }
@@ -229,18 +236,7 @@ func (c *Controller) emitLLDPPackets() {
 	log.Info("LLDP packets emitted")
 }
 
-func (c *Controller) pruneLinks() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	limit := time.Now().Add(-30 * time.Second)
-	for ingressPort, link := range c.links {
-		if link.LastUpdate.Before(limit) {
-			delete(c.links, ingressPort)
-		}
-	}
-}
-
-func (c *Controller) installPuntRule(tableID uint32, actionID uint32, setRoleAgentParamID uint32) error {
+func (c *Controller) installPuntRule(tableID uint32, actionID uint32, ethTypeMatchFieldID uint32, setRoleAgentParamID uint32) error {
 	ethTypeValue := []byte{0, 0}
 	binary.BigEndian.PutUint16(ethTypeValue, uint16(layers.EthernetTypeLinkLayerDiscovery))
 
@@ -254,7 +250,7 @@ func (c *Controller) installPuntRule(tableID uint32, actionID uint32, setRoleAge
 				TableEntry: &p4api.TableEntry{
 					TableId: tableID,
 					Match: []*p4api.FieldMatch{{
-						FieldId: 5,
+						FieldId: ethTypeMatchFieldID,
 						FieldMatchType: &p4api.FieldMatch_Ternary_{
 							Ternary: &p4api.FieldMatch_Ternary{
 								Value: ethTypeValue,
@@ -274,34 +270,4 @@ func (c *Controller) installPuntRule(tableID uint32, actionID uint32, setRoleAge
 		}},
 	})
 	return err
-}
-
-// FindTable returns the named table from the specified P4Info; nil if not found
-func FindTable(info *p4info.P4Info, tableName string) *p4info.Table {
-	for _, table := range info.Tables {
-		if table.Preamble.Name == tableName {
-			return table
-		}
-	}
-	return nil
-}
-
-// FindAction returns the named action from the specified P4Info; nil if not found
-func FindAction(info *p4info.P4Info, actionName string) *p4info.Action {
-	for _, action := range info.Actions {
-		if action.Preamble.Name == actionName {
-			return action
-		}
-	}
-	return nil
-}
-
-// FindActionParam returns the named action from the specified P4Info; nil if not found
-func FindActionParam(action *p4info.Action, paramName string) *p4info.Action_Param {
-	for _, param := range action.Params {
-		if param.Name == paramName {
-			return param
-		}
-	}
-	return nil
 }

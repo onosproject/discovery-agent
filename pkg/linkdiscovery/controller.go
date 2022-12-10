@@ -13,6 +13,7 @@ import (
 	p4info "github.com/p4lang/p4runtime/go/p4/config/v1"
 	p4api "github.com/p4lang/p4runtime/go/p4/v1"
 	"google.golang.org/grpc"
+	"sort"
 	"sync"
 	"time"
 )
@@ -27,12 +28,18 @@ const (
 	Disconnected State = iota
 	// Connected represents state where Stratum connection(s) have been established
 	Connected
-	// Configured represents state where P4Info has been obtained
-	Configured
+	// PipelineConfigAvailable represents state where P4Info has been obtained
+	PipelineConfigAvailable
 	// Elected represents state where the link agent established mastership for its role
 	Elected
 	// PortsDiscovered represents state where the link agent discovered all Stratum ports
 	PortsDiscovered
+	// Configured represents state where the link agent has been fully configured and can discover links
+	Configured
+	// Reconfigured represents state where new configuration has been received
+	Reconfigured
+	// Stopped represents state where the link agent has been issued a stop command
+	Stopped
 )
 
 // Controller represents the link discovery control
@@ -40,12 +47,11 @@ type Controller struct {
 	TargetAddress   string
 	IngressDeviceID string
 
-	state   State
-	lock    sync.RWMutex
-	running bool
-	config  *Config
-	ports   map[string]*Port
-	links   map[uint32]*Link
+	state  State
+	lock   sync.RWMutex
+	config *Config
+	ports  map[string]*Port
+	links  map[uint32]*Link
 
 	conn       *grpc.ClientConn
 	p4Client   p4api.P4RuntimeClient
@@ -100,12 +106,29 @@ func NewController(targetAddress string, agentID string, config *Config) *Contro
 
 // Start starts the controller
 func (c *Controller) Start() {
+	log.Infof("Starting...")
 	go c.run()
 }
 
 // Stop stops the controller
 func (c *Controller) Stop() {
-	c.running = false
+	log.Infof("Stopping...")
+	c.setState(Stopped)
+	c.ctxCancel()
+}
+
+// GetLinks returns a list of currently discovered links, sorted by ingress port
+func (c *Controller) GetLinks() []*Link {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	links := make([]*Link, 0, len(c.links))
+	for _, link := range c.links {
+		links = append(links, link)
+	}
+
+	sort.SliceStable(links, func(i, j int) bool { return links[i].IngressPort < links[j].IngressPort })
+	return links
 }
 
 func (c *Controller) updateIngressLink(ingressPort uint32, egressPort uint32, egressDeviceID string) {
@@ -132,45 +155,63 @@ func (c *Controller) getPort(id string) *Port {
 	return port
 }
 
+func (c *Controller) getState() State {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	state := c.state
+	return state
+}
+
+func (c *Controller) setState(state State) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.state = state
+}
+
 func (c *Controller) run() {
 	log.Infof("Started")
-	c.running = true
-	for c.running {
-		switch c.state {
+	for state := c.getState(); state != Stopped; {
+		switch state {
 		case Disconnected:
 			c.waitForDeviceConnection()
 		case Connected:
 			c.waitForPipelineConfiguration()
-		case Configured:
+		case PipelineConfigAvailable:
 			c.waitForMastershipArbitration()
 		case Elected:
 			c.discoverPorts()
 		case PortsDiscovered:
+			c.setupForLinkDiscovery()
+		case Configured:
 			c.enterLinkDiscovery()
+		case Reconfigured:
+			c.reenterLinkDiscovery()
 		}
 	}
 	log.Infof("Stopped")
 }
 
-func (c *Controller) pauseIfRunning(pause time.Duration) {
-	if c.running {
+func (c *Controller) pauseIf(state State, pause time.Duration) {
+	if c.getState() == state {
 		time.Sleep(pause)
 	}
 }
 
-func (c *Controller) enterLinkDiscovery() {
+func (c *Controller) setupForLinkDiscovery() {
 	// Setup packet-in handler
 	go c.handlePackets()
 
 	// Program intercept rule(s)
 	c.programPacketInterceptRule()
+}
 
+func (c *Controller) enterLinkDiscovery() {
 	tLinks := time.NewTicker(c.config.EmitFrequency)
 	tConf := time.NewTicker(c.config.PipelineValidationFrequency)
 	tPorts := time.NewTicker(c.config.PortRediscoveryFrequency)
 	tPrune := time.NewTicker(c.config.LinkPruneFrequency)
 
-	for c.running && c.state == PortsDiscovered {
+	for c.getState() == Configured {
 		select {
 		// Periodically emit LLDP packets
 		case <-tLinks.C:
@@ -187,6 +228,21 @@ func (c *Controller) enterLinkDiscovery() {
 		// Periodically prune links
 		case <-tPrune.C:
 			c.pruneLinks()
+		}
+	}
+}
+
+func (c *Controller) reenterLinkDiscovery() {
+	c.setState(Configured)
+}
+
+func (c *Controller) pruneLinks() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	limit := time.Now().Add(-30 * time.Second)
+	for ingressPort, link := range c.links {
+		if link.LastUpdate.Before(limit) {
+			delete(c.links, ingressPort)
 		}
 	}
 }
