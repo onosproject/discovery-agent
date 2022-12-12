@@ -5,10 +5,13 @@
 package linkdiscovery
 
 import (
+	"fmt"
 	"github.com/onosproject/onos-net-lib/pkg/configtree"
+	"github.com/onosproject/onos-net-lib/pkg/gnmiutils"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/spf13/viper"
 	"path/filepath"
+	"time"
 )
 
 var configFile = "/opt/link-agent/config.yaml" // not a constant for testing purposes
@@ -92,4 +95,38 @@ func (c *Controller) UpdateConfig() {
 // RefreshConfig refreshes the config tree state from any relevant external source state
 func (c *Controller) RefreshConfig() {
 	// no-op here
+}
+
+func (c *Controller) addLinkToTree(ingressPort uint32, egressPort uint32, egressDeviceID string) {
+	portPath := fmt.Sprintf("state/link[port=%d]/egress-port", ingressPort)
+	portVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_IntVal{IntVal: int64(egressPort)}}
+	devicePath := fmt.Sprintf("state/link[port=%d]/egress-device", ingressPort)
+	deviceVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_StringVal{StringVal: egressDeviceID}}
+
+	c.Root().AddPath(portPath, portVal)
+	c.Root().AddPath(devicePath, deviceVal)
+
+	// Forward the add notification to any subscribe responders
+	c.SendToAllResponders(&gnmi.SubscribeResponse{Response: &gnmi.SubscribeResponse_Update{
+		Update: &gnmi.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Update: []*gnmi.Update{
+				{Path: gnmiutils.ToPath(portPath), Val: portVal},
+				{Path: gnmiutils.ToPath(devicePath), Val: deviceVal},
+			},
+		},
+	}})
+}
+
+func (c *Controller) removeLinkFromTree(ingressPort uint32) {
+	path := fmt.Sprintf("state/link[port=%d]", ingressPort)
+	_ = c.Root().DeletePath(path)
+
+	// Forward the delete notification to any subscribe responders
+	c.SendToAllResponders(&gnmi.SubscribeResponse{Response: &gnmi.SubscribeResponse_Update{
+		Update: &gnmi.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Delete:    []*gnmi.Path{gnmiutils.ToPath(path)},
+		},
+	}})
 }

@@ -90,8 +90,6 @@ type Link struct {
 // NewController creates a new link discovery controller
 func NewController(targetAddress string, agentID string) *Controller {
 	config := loadConfig()
-	//root := createConfigRoot(config)
-
 	return &Controller{
 		GNMIConfigurable: configtree.NewGNMIConfigurable(createConfigRoot(config)),
 		TargetAddress:    targetAddress,
@@ -141,9 +139,25 @@ func (c *Controller) updateIngressLink(ingressPort uint32, egressPort uint32, eg
 			EgressDeviceID: egressDeviceID,
 			IngressPort:    ingressPort,
 		}
+
+		// Add the link to our internal structure and to the config tree
 		c.links[ingressPort] = link
+		c.addLinkToTree(ingressPort, egressPort, egressDeviceID)
 	}
 	link.LastUpdate = time.Now()
+}
+
+func (c *Controller) pruneLinks() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	limit := time.Now().Add(-30 * time.Second)
+	for ingressPort, link := range c.links {
+		if link.LastUpdate.Before(limit) {
+			// Delete the link from our internal structure and from the config tree
+			delete(c.links, ingressPort)
+			c.removeLinkFromTree(ingressPort)
+		}
+	}
 }
 
 func (c *Controller) getPort(id string) *Port {
@@ -246,15 +260,4 @@ func (c *Controller) enterLinkDiscovery() {
 
 func (c *Controller) reenterLinkDiscovery() {
 	c.setState(Configured)
-}
-
-func (c *Controller) pruneLinks() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	limit := time.Now().Add(-30 * time.Second)
-	for ingressPort, link := range c.links {
-		if link.LastUpdate.Before(limit) {
-			delete(c.links, ingressPort)
-		}
-	}
 }
