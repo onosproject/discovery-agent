@@ -11,7 +11,6 @@ import (
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
 	"io/ioutil"
-	"time"
 )
 
 var log = logging.GetLogger("manager")
@@ -55,17 +54,8 @@ func (m *Manager) Start() error {
 	// Load (or generate and save) our UUID
 	agentID := m.loadOrCreateUUID()
 
-	// TODO: make this retrievable from a file
-	config := &linkdiscovery.Config{
-		EmitFrequency:               5 * time.Second,
-		MaxLinkAge:                  30 * time.Second,
-		PipelineValidationFrequency: 60 * time.Second,
-		PortRediscoveryFrequency:    60 * time.Second,
-		LinkPruneFrequency:          2 * time.Second,
-	}
-
 	// Initialize and start the link discovery controller
-	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, agentID, config)
+	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, agentID)
 	m.Controller.Start()
 
 	// Starts NB server
