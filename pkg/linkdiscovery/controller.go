@@ -8,6 +8,7 @@ package linkdiscovery
 import (
 	"context"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
+	"github.com/onosproject/onos-net-lib/pkg/configtree"
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	p4info "github.com/p4lang/p4runtime/go/p4/config/v1"
@@ -44,6 +45,8 @@ const (
 
 // Controller represents the link discovery control
 type Controller struct {
+	*configtree.GNMIConfigurable
+
 	TargetAddress   string
 	IngressDeviceID string
 
@@ -69,15 +72,6 @@ type Controller struct {
 	role       *p4api.Role
 }
 
-// Config contains configuration parameters for the link discovery
-type Config struct {
-	EmitFrequency               time.Duration
-	MaxLinkAge                  time.Duration
-	PipelineValidationFrequency time.Duration
-	PortRediscoveryFrequency    time.Duration
-	LinkPruneFrequency          time.Duration
-}
-
 // Port holds data about each discovered switch ports
 type Port struct {
 	ID     string
@@ -94,13 +88,17 @@ type Link struct {
 }
 
 // NewController creates a new link discovery controller
-func NewController(targetAddress string, agentID string, config *Config) *Controller {
+func NewController(targetAddress string, agentID string) *Controller {
+	config := loadConfig()
+	//root := createConfigRoot(config)
+
 	return &Controller{
-		TargetAddress:   targetAddress,
-		IngressDeviceID: agentID,
-		config:          config,
-		ports:           make(map[string]*Port),
-		links:           make(map[uint32]*Link),
+		GNMIConfigurable: configtree.NewGNMIConfigurable(createConfigRoot(config)),
+		TargetAddress:    targetAddress,
+		IngressDeviceID:  agentID,
+		config:           config,
+		ports:            make(map[string]*Port),
+		links:            make(map[uint32]*Link),
 	}
 }
 
@@ -114,7 +112,9 @@ func (c *Controller) Start() {
 func (c *Controller) Stop() {
 	log.Infof("Stopping...")
 	c.setState(Stopped)
-	c.ctxCancel()
+	if c.ctxCancel != nil {
+		c.ctxCancel()
+	}
 }
 
 // GetLinks returns a list of currently discovered links, sorted by ingress port
@@ -155,6 +155,7 @@ func (c *Controller) getPort(id string) *Port {
 	return port
 }
 
+// Get the current operational state
 func (c *Controller) getState() State {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -162,10 +163,20 @@ func (c *Controller) getState() State {
 	return state
 }
 
+// Change state to the new state
 func (c *Controller) setState(state State) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.state = state
+}
+
+// Change state to the new state, but only if in the given condition state
+func (c *Controller) setStateIf(condition State, state State) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.state == condition {
+		c.state = state
+	}
 }
 
 func (c *Controller) run() {
@@ -191,8 +202,9 @@ func (c *Controller) run() {
 	log.Infof("Stopped")
 }
 
-func (c *Controller) pauseIf(state State, pause time.Duration) {
-	if c.getState() == state {
+// Pause for the specified duration, but only if in the given condition state
+func (c *Controller) pauseIf(condition State, pause time.Duration) {
+	if c.getState() == condition {
 		time.Sleep(pause)
 	}
 }
@@ -206,10 +218,10 @@ func (c *Controller) setupForLinkDiscovery() {
 }
 
 func (c *Controller) enterLinkDiscovery() {
-	tLinks := time.NewTicker(c.config.EmitFrequency)
-	tConf := time.NewTicker(c.config.PipelineValidationFrequency)
-	tPorts := time.NewTicker(c.config.PortRediscoveryFrequency)
-	tPrune := time.NewTicker(c.config.LinkPruneFrequency)
+	tLinks := time.NewTicker(time.Duration(c.config.EmitFrequency) * time.Second)
+	tConf := time.NewTicker(time.Duration(c.config.PipelineValidationFrequency) * time.Second)
+	tPorts := time.NewTicker(time.Duration(c.config.PortRediscoveryFrequency) * time.Second)
+	tPrune := time.NewTicker(time.Duration(c.config.LinkPruneFrequency) * time.Second)
 
 	for c.getState() == Configured {
 		select {
