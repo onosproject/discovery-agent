@@ -13,8 +13,11 @@ require (
 
 require (
 	github.com/google/gopacket v1.1.19
-	github.com/google/uuid v1.1.2
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
+	github.com/google/uuid v1.2.0
+	github.com/onosproject/fabric-sim v0.1.16
+	github.com/onosproject/helmit v0.6.20
+	github.com/onosproject/onos-api/go v0.10.5
+	github.com/onosproject/onos-test v0.6.6
 	github.com/spf13/viper v1.11.0
 	github.com/stretchr/testify v1.7.1
 )

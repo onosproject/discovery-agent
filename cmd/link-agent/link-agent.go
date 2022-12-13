@@ -29,22 +29,22 @@ func getRootCommand() *cobra.Command {
 		Short: "link-agent",
 		RunE:  runRootCommand,
 	}
-	cmd.Flags().Int("bind-port", 5051, "listen TCP port of the link agent")
 	cmd.Flags().String("target-address", "localhost:9339", "address:port or just :port of the stratum agent")
+	cmd.Flags().Int("bind-port", 5051, "listen TCP port of the link agent gNMI service")
+	cmd.Flags().Bool("no-tls", true, "if set, do not use TLS for link agent gNMI service")
 	cmd.Flags().String("caPath", "", "path to CA certificate")
 	cmd.Flags().String("keyPath", "", "path to client private key")
 	cmd.Flags().String("certPath", "", "path to client certificate")
-	cmd.Flags().Bool("no-tls", true, "if set, do not use TLS for link agent service")
 	return cmd
 }
 
 func runRootCommand(cmd *cobra.Command, args []string) error {
-	tcpPort, _ := cmd.Flags().GetInt("bind-port")
 	targetAddress, _ := cmd.Flags().GetString("target-address")
+	tcpPort, _ := cmd.Flags().GetInt("bind-port")
+	noTLS, _ := cmd.Flags().GetBool("no-tls")
 	caPath, _ := cmd.Flags().GetString("caPath")
 	keyPath, _ := cmd.Flags().GetString("keyPath")
 	certPath, _ := cmd.Flags().GetString("certPath")
-	noTLS, _ := cmd.Flags().GetBool("no-tls")
 
 	log.Infow("Starting link-agent",
 		"CAPath", caPath,

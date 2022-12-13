@@ -96,7 +96,7 @@ func (m *Manager) Close() {
 	m.Controller.Stop()
 }
 
-const uuidFile = "/opt/link-agent/uuid"
+const uuidFile = "/etc/link-agent/uuid"
 
 func (m *Manager) loadOrCreateUUID() string {
 	if b, err := ioutil.ReadFile(uuidFile); err == nil {

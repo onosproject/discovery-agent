@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var configFile = "/opt/link-agent/config.yaml" // not a constant for testing purposes
+var configFile = "/etc/link-agent/config.yaml" // not a constant for testing purposes
 
 // Config contains configuration parameters for the link discovery
 type Config struct {
