@@ -17,12 +17,13 @@ var log = logging.GetLogger("manager")
 
 // Config is a manager configuration
 type Config struct {
+	AgentUUID     string
+	TargetAddress string
+	GRPCPort      int
+	NoTLS         bool
 	CAPath        string
 	KeyPath       string
 	CertPath      string
-	GRPCPort      int
-	NoTLS         bool
-	TargetAddress string
 }
 
 // Manager single point of entry for the link-agent
@@ -42,7 +43,7 @@ func NewManager(cfg Config) *Manager {
 
 // Run runs manager
 func (m *Manager) Run() {
-	log.Infow("Starting Manager")
+	log.Infof("Starting Manager... UUID: %s", m.Config.AgentUUID)
 
 	if err := m.Start(); err != nil {
 		log.Fatalw("Unable to run Manager", "error", err)
@@ -52,10 +53,12 @@ func (m *Manager) Run() {
 // Start initializes and starts the link controller and the NB gNMI API.
 func (m *Manager) Start() error {
 	// Load (or generate and save) our UUID
-	agentID := m.loadOrCreateUUID()
+	if len(m.Config.AgentUUID) == 0 {
+		m.Config.AgentUUID = m.loadOrCreateUUID()
+	}
 
 	// Initialize and start the link discovery controller
-	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, agentID)
+	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
 	m.Controller.Start()
 
 	// Starts NB server

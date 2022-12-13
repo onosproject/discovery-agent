@@ -30,7 +30,7 @@ const (
 )
 
 func (c *Controller) waitForDeviceConnection() {
-	log.Infof("Connecting to stratum agent...")
+	log.Infof("Connecting to stratum agent at %s...", c.TargetAddress)
 	for c.getState() == Disconnected {
 		opts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

@@ -29,6 +29,7 @@ func getRootCommand() *cobra.Command {
 		Short: "link-agent",
 		RunE:  runRootCommand,
 	}
+	cmd.Flags().String("uuid", "", "externally assigned UUID of this agent; if omitted, one will be auto-generated")
 	cmd.Flags().String("target-address", "localhost:9339", "address:port or just :port of the stratum agent")
 	cmd.Flags().Int("bind-port", 5051, "listen TCP port of the link agent gNMI service")
 	cmd.Flags().Bool("no-tls", true, "if set, do not use TLS for link agent gNMI service")
@@ -39,6 +40,7 @@ func getRootCommand() *cobra.Command {
 }
 
 func runRootCommand(cmd *cobra.Command, args []string) error {
+	agentUUID, _ := cmd.Flags().GetString("uuid")
 	targetAddress, _ := cmd.Flags().GetString("target-address")
 	tcpPort, _ := cmd.Flags().GetInt("bind-port")
 	noTLS, _ := cmd.Flags().GetBool("no-tls")
@@ -53,6 +55,7 @@ func runRootCommand(cmd *cobra.Command, args []string) error {
 	)
 
 	cfg := manager.Config{
+		AgentUUID:     agentUUID,
 		CAPath:        caPath,
 		KeyPath:       keyPath,
 		CertPath:      certPath,
