@@ -16,6 +16,7 @@ import (
 	p4api "github.com/p4lang/p4runtime/go/p4/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"io"
 	"strconv"
 	"time"
 )
@@ -109,6 +110,9 @@ func (c *Controller) waitForMastershipArbitration() {
 						var msg *p4api.StreamMessageResponse
 						if msg, err = c.stream.Recv(); err != nil {
 							log.Warnf("Unable to receive stream response: %+v", err)
+							if err == io.EOF {
+								c.setState(Disconnected)
+							}
 						} else {
 							mar = msg.GetArbitration()
 							if mar == nil {
