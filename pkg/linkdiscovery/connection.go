@@ -22,7 +22,7 @@ import (
 
 const (
 	linkAgentRoleName = "link_local_agent"
-	linkAgentRoleID   = "\x07"
+	linkAgentRoleID   = "\x03"
 
 	connectionRetryPause            = 5 * time.Second
 	pipelineFetchRetryPause         = 5 * time.Second
@@ -30,7 +30,7 @@ const (
 )
 
 func (c *Controller) waitForDeviceConnection() {
-	log.Infof("Connecting to stratum agent...")
+	log.Infof("Connecting to stratum agent at %s...", c.TargetAddress)
 	for c.getState() == Disconnected {
 		opts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -44,9 +44,10 @@ func (c *Controller) waitForDeviceConnection() {
 			c.ctx, c.ctxCancel = context.WithCancel(context.Background())
 			c.setState(Connected)
 			log.Infof("Connected")
-			return
+		} else {
+			log.Warnf("Unable to connect to stratum agent: %+v", err)
+			c.pauseIf(Disconnected, connectionRetryPause)
 		}
-		c.pauseIf(Disconnected, connectionRetryPause)
 	}
 }
 
@@ -58,13 +59,18 @@ func (c *Controller) waitForPipelineConfiguration() {
 			ResponseType: p4api.GetForwardingPipelineConfigRequest_P4INFO_AND_COOKIE,
 		})
 		if err == nil {
-			c.cookie = resp.Config.Cookie.Cookie
-			c.info = resp.Config.P4Info
-			c.codec = p4utils.NewControllerMetadataCodec(c.info)
-			c.role = p4utils.NewStratumRole(linkAgentRoleName, c.codec.RoleAgentIDMetadataID(), []byte(linkAgentRoleID), true, false)
-			c.setState(PipelineConfigAvailable)
-			log.Infof("Pipeline configuration obtained and processed")
-			return
+			if resp.Config.Cookie.Cookie != 0 {
+				c.cookie = resp.Config.Cookie.Cookie
+				c.info = resp.Config.P4Info
+				c.codec = p4utils.NewControllerMetadataCodec(c.info)
+				c.role = p4utils.NewStratumRole(linkAgentRoleName, c.codec.RoleAgentIDMetadataID(), []byte(linkAgentRoleID), true, false)
+				c.setState(PipelineConfigAvailable)
+				log.Infof("Pipeline configuration obtained and processed")
+			} else {
+				log.Warnf("Pipeline configuration not set yet on the stratum device")
+			}
+		} else {
+			log.Warnf("Unable to retrieve pipeline configuration: %+v", err)
 		}
 		c.pauseIf(Connected, pipelineFetchRetryPause)
 	}
@@ -141,7 +147,7 @@ func (c *Controller) discoverPorts() {
 
 	ports := make(map[string]*Port)
 	for _, update := range resp.Notification[0].Update {
-		port := c.getPort(update.Path.Elem[1].Key["name"])
+		port := getPort(ports, update.Path.Elem[1].Key["name"])
 		last := len(update.Path.Elem) - 1
 		switch update.Path.Elem[last].Name {
 		case "id":
@@ -151,16 +157,25 @@ func (c *Controller) discoverPorts() {
 		}
 	}
 
+	c.setStateIf(Elected, PortsDiscovered)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.ports = ports
-	c.setState(PortsDiscovered)
 	log.Infof("Ports discovered")
+}
+
+func getPort(ports map[string]*Port, id string) *Port {
+	port, ok := ports[id]
+	if !ok {
+		port = &Port{ID: id}
+		ports[id] = port
+	}
+	return port
 }
 
 func (c *Controller) handlePackets() {
 	log.Infof("Monitoring message stream")
-	for c.getState() == PortsDiscovered {
+	for {
 		msg, err := c.stream.Recv()
 		if err != nil {
 			log.Warnf("Unable to read stream response: %+v", err)
@@ -171,6 +186,11 @@ func (c *Controller) handlePackets() {
 			c.processPacket(msg.GetPacket())
 		}
 		// TODO: deal with mastership arbitration update in case we got demoted
+
+		state := c.getState()
+		if state != Configured && state != Reconfigured {
+			return
+		}
 	}
 }
 
@@ -262,7 +282,7 @@ func (c *Controller) installPuntRule(tableID uint32, actionID uint32, ethTypeMat
 						Type: &p4api.TableAction_Action{
 							Action: &p4api.Action{
 								ActionId: actionID,
-								Params:   []*p4api.Action_Param{{ParamId: setRoleAgentParamID, Value: []byte(linkAgentRoleName)}},
+								Params:   []*p4api.Action_Param{{ParamId: setRoleAgentParamID, Value: []byte(linkAgentRoleID)}},
 							},
 						},
 					},

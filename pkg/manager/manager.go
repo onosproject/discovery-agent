@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package manager contains the link agent manager coordinating lifecycle of the NB API and link discovery controller
 package manager
 
 import (
@@ -10,19 +11,22 @@ import (
 	"github.com/onosproject/link-agent/pkg/northbound/gnmi"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
-	"io/ioutil"
+	"os"
+	"strconv"
+	"strings"
 )
 
 var log = logging.GetLogger("manager")
 
 // Config is a manager configuration
 type Config struct {
+	AgentUUID     string
+	TargetAddress string
+	GRPCPort      int
+	NoTLS         bool
 	CAPath        string
 	KeyPath       string
 	CertPath      string
-	GRPCPort      int
-	NoTLS         bool
-	TargetAddress string
 }
 
 // Manager single point of entry for the link-agent
@@ -42,7 +46,7 @@ func NewManager(cfg Config) *Manager {
 
 // Run runs manager
 func (m *Manager) Run() {
-	log.Infow("Starting Manager")
+	log.Infof("Starting Manager... UUID: %s", m.Config.AgentUUID)
 
 	if err := m.Start(); err != nil {
 		log.Fatalw("Unable to run Manager", "error", err)
@@ -52,10 +56,17 @@ func (m *Manager) Run() {
 // Start initializes and starts the link controller and the NB gNMI API.
 func (m *Manager) Start() error {
 	// Load (or generate and save) our UUID
-	agentID := m.loadOrCreateUUID()
+	if len(m.Config.AgentUUID) == 0 {
+		m.Config.AgentUUID = m.loadOrCreateUUID()
+	}
+
+	// If the incoming configuration is insufficient, attempt to get needed info from file
+	if m.Config.GRPCPort == 0 || len(m.Config.TargetAddress) == 0 {
+		m.Config.GRPCPort, m.Config.TargetAddress = readArgsFile()
+	}
 
 	// Initialize and start the link discovery controller
-	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, agentID)
+	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
 	m.Controller.Start()
 
 	// Starts NB server
@@ -96,16 +107,28 @@ func (m *Manager) Close() {
 	m.Controller.Stop()
 }
 
-const uuidFile = "/opt/link-agent/uuid"
+const argsFile = "/etc/link-agent/args"
+const uuidFile = "/etc/link-agent/uuid"
 
 func (m *Manager) loadOrCreateUUID() string {
-	if b, err := ioutil.ReadFile(uuidFile); err == nil {
+	if b, err := os.ReadFile(uuidFile); err == nil {
 		return string(b)
 	}
 
 	newUUID := uuid.New().String()
-	if err := ioutil.WriteFile(uuidFile, []byte(newUUID), 0644); err != nil {
+	if err := os.WriteFile(uuidFile, []byte(newUUID), 0644); err != nil {
 		log.Fatalf("Unable to save UUID: %+v", err)
 	}
 	return newUUID
+}
+
+func readArgsFile() (int, string) {
+	log.Infof("Reading args from file: %s", argsFile)
+	b, err := os.ReadFile(argsFile)
+	if err != nil {
+		log.Fatalf("Unable to read args file: %+v", err)
+	}
+	args := strings.Split(strings.Trim(string(b), " \n"), " ")
+	bindPort, _ := strconv.ParseInt(args[0], 10, 16)
+	return int(bindPort), args[1]
 }

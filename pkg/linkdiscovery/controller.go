@@ -45,7 +45,8 @@ const (
 
 // Controller represents the link discovery control
 type Controller struct {
-	*configtree.GNMIConfigurable
+	configtree.Configurable
+	configtree.GNMIConfigurable
 
 	TargetAddress   string
 	IngressDeviceID string
@@ -90,14 +91,16 @@ type Link struct {
 // NewController creates a new link discovery controller
 func NewController(targetAddress string, agentID string) *Controller {
 	config := loadConfig()
-	return &Controller{
-		GNMIConfigurable: configtree.NewGNMIConfigurable(createConfigRoot(config)),
+	ctrl := &Controller{
+		GNMIConfigurable: *configtree.NewGNMIConfigurable(createConfigRoot(config)),
 		TargetAddress:    targetAddress,
 		IngressDeviceID:  agentID,
 		config:           config,
 		ports:            make(map[string]*Port),
 		links:            make(map[uint32]*Link),
 	}
+	ctrl.GNMIConfigurable.Configurable = ctrl
+	return ctrl
 }
 
 // Start starts the controller
@@ -133,7 +136,7 @@ func (c *Controller) updateIngressLink(ingressPort uint32, egressPort uint32, eg
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	link, ok := c.links[ingressPort]
-	if !ok {
+	if !ok || link.EgressPort != egressPort || link.EgressDeviceID != egressDeviceID {
 		link = &Link{
 			EgressPort:     egressPort,
 			EgressDeviceID: egressDeviceID,
@@ -142,6 +145,7 @@ func (c *Controller) updateIngressLink(ingressPort uint32, egressPort uint32, eg
 
 		// Add the link to our internal structure and to the config tree
 		c.links[ingressPort] = link
+		log.Infof("Added a new link: %d <- %s/%d", ingressPort, egressDeviceID, egressPort)
 		c.addLinkToTree(ingressPort, egressPort, egressDeviceID)
 	}
 	link.LastUpdate = time.Now()
@@ -156,17 +160,9 @@ func (c *Controller) pruneLinks() {
 			// Delete the link from our internal structure and from the config tree
 			delete(c.links, ingressPort)
 			c.removeLinkFromTree(ingressPort)
+			log.Infof("Pruned stale link: %d <- %s/%d", link.IngressPort, link.EgressDeviceID, link.EgressPort)
 		}
 	}
-}
-
-func (c *Controller) getPort(id string) *Port {
-	port, ok := c.ports[id]
-	if !ok {
-		port = &Port{ID: id}
-		c.ports[id] = port
-	}
-	return port
 }
 
 // Get the current operational state
@@ -195,7 +191,7 @@ func (c *Controller) setStateIf(condition State, state State) {
 
 func (c *Controller) run() {
 	log.Infof("Started")
-	for state := c.getState(); state != Stopped; {
+	for state := c.getState(); state != Stopped; state = c.getState() {
 		switch state {
 		case Disconnected:
 			c.waitForDeviceConnection()
@@ -224,11 +220,12 @@ func (c *Controller) pauseIf(condition State, pause time.Duration) {
 }
 
 func (c *Controller) setupForLinkDiscovery() {
-	// Setup packet-in handler
-	go c.handlePackets()
-
 	// Program intercept rule(s)
 	c.programPacketInterceptRule()
+	c.setState(Configured)
+
+	// Setup packet-in handler
+	go c.handlePackets()
 }
 
 func (c *Controller) enterLinkDiscovery() {

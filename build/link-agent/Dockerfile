@@ -19,6 +19,7 @@ RUN go build -mod=vendor -o build/_output/link-agent ./cmd/link-agent
 
 FROM alpine:3.13
 RUN apk add libc6-compat
+RUN mkdir -p /etc/link-agent && chmod 777 /etc/link-agent
 
 USER nobody
 
