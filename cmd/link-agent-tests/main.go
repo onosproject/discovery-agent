@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package main is an entry point for launching the link agent integration tests
 package main
 
 import (
