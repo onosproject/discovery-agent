@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// Package manager contains the link agent manager coordinating lifecycle of the NB API and link discovery controller
 package manager
 
 import (
