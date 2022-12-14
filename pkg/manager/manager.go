@@ -11,7 +11,7 @@ import (
 	"github.com/onosproject/link-agent/pkg/northbound/gnmi"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -111,12 +111,12 @@ const argsFile = "/etc/link-agent/args"
 const uuidFile = "/etc/link-agent/uuid"
 
 func (m *Manager) loadOrCreateUUID() string {
-	if b, err := ioutil.ReadFile(uuidFile); err == nil {
+	if b, err := os.ReadFile(uuidFile); err == nil {
 		return string(b)
 	}
 
 	newUUID := uuid.New().String()
-	if err := ioutil.WriteFile(uuidFile, []byte(newUUID), 0644); err != nil {
+	if err := os.WriteFile(uuidFile, []byte(newUUID), 0644); err != nil {
 		log.Fatalf("Unable to save UUID: %+v", err)
 	}
 	return newUUID
@@ -124,7 +124,7 @@ func (m *Manager) loadOrCreateUUID() string {
 
 func readArgsFile() (int, string) {
 	log.Infof("Reading args from file: %s", argsFile)
-	b, err := ioutil.ReadFile(argsFile)
+	b, err := os.ReadFile(argsFile)
 	if err != nil {
 		log.Fatalf("Unable to read args file: %+v", err)
 	}
