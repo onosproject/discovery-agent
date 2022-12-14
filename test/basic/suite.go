@@ -6,6 +6,7 @@
 package basic
 
 import (
+	"github.com/onosproject/fabric-sim/pkg/topo"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
 	"github.com/onosproject/helmit/pkg/test"
@@ -22,6 +23,7 @@ type TestSuite struct {
 }
 
 const fabricSimComponentName = "fabric-sim"
+const linkLocalAgentComponentName = "link-local-agent"
 
 // SetupTestSuite sets up the link agent basic test suite using fabric-sim
 func (s *TestSuite) SetupTestSuite(c *input.Context) error {
@@ -34,5 +36,23 @@ func (s *TestSuite) SetupTestSuite(c *input.Context) error {
 	if err != nil {
 		return err
 	}
-	return nil
+
+	err = helm.Chart(linkLocalAgentComponentName, onostest.OnosChartRepo).
+		Release(linkLocalAgentComponentName).
+		Set("image.tag", "latest").
+		Set("global.image.registry", registry).
+		Set("agent.count", 4). // There are 4 devices in plain_small.yaml topology file
+		Install(true)
+	if err != nil {
+		return err
+	}
+
+	conn, err := CreateInsecureConnection("fabric-sim:5150")
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Load topology
+	return topo.LoadTopology(conn, "test/basic/plain_small.yaml")
 }

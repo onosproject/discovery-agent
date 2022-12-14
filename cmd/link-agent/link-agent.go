@@ -30,8 +30,8 @@ func getRootCommand() *cobra.Command {
 		RunE:  runRootCommand,
 	}
 	cmd.Flags().String("uuid", "", "externally assigned UUID of this agent; if omitted, one will be auto-generated")
-	cmd.Flags().String("target-address", "localhost:9339", "address:port or just :port of the stratum agent")
-	cmd.Flags().Int("bind-port", 5051, "listen TCP port of the link agent gNMI service")
+	cmd.Flags().String("target-address", "", "address:port or just :port of the stratum agent")
+	cmd.Flags().Int("bind-port", 0, "listen TCP port of the link agent gNMI service")
 	cmd.Flags().Bool("no-tls", true, "if set, do not use TLS for link agent gNMI service")
 	cmd.Flags().String("caPath", "", "path to CA certificate")
 	cmd.Flags().String("keyPath", "", "path to client private key")
@@ -41,18 +41,14 @@ func getRootCommand() *cobra.Command {
 
 func runRootCommand(cmd *cobra.Command, args []string) error {
 	agentUUID, _ := cmd.Flags().GetString("uuid")
-	targetAddress, _ := cmd.Flags().GetString("target-address")
 	tcpPort, _ := cmd.Flags().GetInt("bind-port")
+	targetAddress, _ := cmd.Flags().GetString("target-address")
 	noTLS, _ := cmd.Flags().GetBool("no-tls")
 	caPath, _ := cmd.Flags().GetString("caPath")
 	keyPath, _ := cmd.Flags().GetString("keyPath")
 	certPath, _ := cmd.Flags().GetString("certPath")
 
-	log.Infow("Starting link-agent",
-		"CAPath", caPath,
-		"KeyPath", keyPath,
-		"CertPath", certPath,
-	)
+	log.Infof("Starting link-agent")
 
 	cfg := manager.Config{
 		AgentUUID:     agentUUID,

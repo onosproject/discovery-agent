@@ -11,6 +11,8 @@ import (
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
 	"io/ioutil"
+	"strconv"
+	"strings"
 )
 
 var log = logging.GetLogger("manager")
@@ -57,6 +59,11 @@ func (m *Manager) Start() error {
 		m.Config.AgentUUID = m.loadOrCreateUUID()
 	}
 
+	// If the incoming configuration is insufficient, attempt to get needed info from file
+	if m.Config.GRPCPort == 0 || len(m.Config.TargetAddress) == 0 {
+		m.Config.GRPCPort, m.Config.TargetAddress = readArgsFile()
+	}
+
 	// Initialize and start the link discovery controller
 	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
 	m.Controller.Start()
@@ -99,6 +106,7 @@ func (m *Manager) Close() {
 	m.Controller.Stop()
 }
 
+const argsFile = "/etc/link-agent/args"
 const uuidFile = "/etc/link-agent/uuid"
 
 func (m *Manager) loadOrCreateUUID() string {
@@ -111,4 +119,15 @@ func (m *Manager) loadOrCreateUUID() string {
 		log.Fatalf("Unable to save UUID: %+v", err)
 	}
 	return newUUID
+}
+
+func readArgsFile() (int, string) {
+	log.Infof("Reading args from file: %s", argsFile)
+	b, err := ioutil.ReadFile(argsFile)
+	if err != nil {
+		log.Fatalf("Unable to read args file: %+v", err)
+	}
+	args := strings.Split(strings.Trim(string(b), " \n"), " ")
+	bindPort, _ := strconv.ParseInt(args[0], 10, 16)
+	return int(bindPort), args[1]
 }

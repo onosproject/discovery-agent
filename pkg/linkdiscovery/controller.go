@@ -45,7 +45,8 @@ const (
 
 // Controller represents the link discovery control
 type Controller struct {
-	*configtree.GNMIConfigurable
+	configtree.Configurable
+	configtree.GNMIConfigurable
 
 	TargetAddress   string
 	IngressDeviceID string
@@ -90,14 +91,16 @@ type Link struct {
 // NewController creates a new link discovery controller
 func NewController(targetAddress string, agentID string) *Controller {
 	config := loadConfig()
-	return &Controller{
-		GNMIConfigurable: configtree.NewGNMIConfigurable(createConfigRoot(config)),
+	ctrl := &Controller{
+		GNMIConfigurable: *configtree.NewGNMIConfigurable(createConfigRoot(config)),
 		TargetAddress:    targetAddress,
 		IngressDeviceID:  agentID,
 		config:           config,
 		ports:            make(map[string]*Port),
 		links:            make(map[uint32]*Link),
 	}
+	ctrl.GNMIConfigurable.Configurable = ctrl
+	return ctrl
 }
 
 // Start starts the controller
