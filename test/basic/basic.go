@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"sync"
 	"testing"
 	"time"
 )
@@ -39,18 +40,30 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 	info, err := p4utils.LoadP4Info("test/basic/p4info.txt")
 	assert.NoError(t, err)
 
-	t.Log("Setting pipeline configuration for devices")
-	for _, device := range dresp.Devices {
-		SetPipelineConfig(t, device, info)
+	wg := sync.WaitGroup{}
+	wg.Add(2 * len(dresp.Devices))
+
+	for i, device := range dresp.Devices {
+		go func(id int, d *simapi.Device) {
+			SetPipelineConfig(t, id, d, info)
+			wg.Done()
+		}(i, device)
+
+		go func(id int) {
+			ValidateLinkDiscovery(t, id)
+			wg.Done()
+		}(i)
 	}
 
-	for i := range dresp.Devices {
-		ValidateLinkDiscovery(t, i)
-	}
+	wg.Wait()
+
+	// TODO: add test where we disable port and listen for subsequent link delete events (due to pruning)
 }
 
 // SetPipelineConfig applies the pipeline configuration to the specified device.
-func SetPipelineConfig(t *testing.T, device *simapi.Device, info *p4info.P4Info) {
+func SetPipelineConfig(t *testing.T, id int, device *simapi.Device, info *p4info.P4Info) {
+	t.Logf("%d: Setting pipeline configuration...", id)
+
 	dconn, err := CreateInsecureConnection(fmt.Sprintf("fabric-sim:%d", device.ControlPort))
 	assert.NoError(t, err)
 
@@ -91,7 +104,7 @@ func ValidateLinkDiscovery(t *testing.T, id int) {
 	assert.NoError(t, err)
 	gnmiClient := gnmi.NewGNMIClient(gconn)
 
-	t.Log("Subscribing for gNMI notifications")
+	t.Logf("%d: Subscribing for gNMI notifications...", id)
 	ctx := context.Background()
 	subClient, err := gnmiClient.Subscribe(ctx)
 	assert.NoError(t, err)
@@ -110,15 +123,15 @@ func ValidateLinkDiscovery(t *testing.T, id int) {
 		sresp, err1 := subClient.Recv()
 		assert.NoError(t, err1)
 		i += len(sresp.GetUpdate().Update)
-		t.Logf("Received update: %+v", sresp)
+		//t.Logf("%d: Received update: %+v", id, sresp)
 	}
 
 	// Check basic queries to start
-	t.Log("Getting links via gNMI")
+	t.Logf("%d: Getting links via gNMI...", id)
 	resp, err := gnmiClient.Get(ctx, &gnmi.GetRequest{
 		Path: []*gnmi.Path{utils.ToPath("state/link[port=...]")},
 	})
-	t.Logf("Received get response: %+v", resp)
+	//t.Logf("%d: Received get response: %+v", id, resp)
 
 	assert.NoError(t, err)
 	assert.Len(t, resp.Notification, 1)
@@ -128,7 +141,6 @@ func ValidateLinkDiscovery(t *testing.T, id int) {
 // CreateInsecureConnection creates gRPC connection to the specified gRPC end-point
 func CreateInsecureConnection(targetAaddress string) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{
-		//grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor()),
 	}

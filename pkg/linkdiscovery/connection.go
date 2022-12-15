@@ -142,6 +142,7 @@ func (c *Controller) discoverPorts() {
 	})
 	if err != nil {
 		log.Warn("Unable to issue gNMI request for port list: %+v", err)
+		c.setStateIf(Elected, Disconnected)
 		return
 	}
 	if len(resp.Notification) == 0 {
@@ -183,6 +184,9 @@ func (c *Controller) handlePackets() {
 		msg, err := c.stream.Recv()
 		if err != nil {
 			log.Warnf("Unable to read stream response: %+v", err)
+			if err == io.EOF {
+				c.setState(Disconnected)
+			}
 			return
 		}
 
