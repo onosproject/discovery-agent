@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/onosproject/link-agent/pkg/linkdiscovery"
 	"github.com/onosproject/link-agent/pkg/northbound/gnmi"
+	"github.com/onosproject/onos-lib-go/pkg/cli"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
 	"os"
@@ -22,15 +23,12 @@ var log = logging.GetLogger("manager")
 type Config struct {
 	AgentUUID     string
 	TargetAddress string
-	GRPCPort      int
-	NoTLS         bool
-	CAPath        string
-	KeyPath       string
-	CertPath      string
+	ServiceFlags  *cli.ServiceEndpointFlags
 }
 
 // Manager single point of entry for the link-agent
 type Manager struct {
+	cli.Daemon
 	Config     Config
 	Controller *linkdiscovery.Controller
 }
@@ -44,25 +42,18 @@ func NewManager(cfg Config) *Manager {
 	return &mgr
 }
 
-// Run runs manager
-func (m *Manager) Run() {
-	log.Infof("Starting Manager... UUID: %s", m.Config.AgentUUID)
-
-	if err := m.Start(); err != nil {
-		log.Fatalw("Unable to run Manager", "error", err)
-	}
-}
-
 // Start initializes and starts the link controller and the NB gNMI API.
 func (m *Manager) Start() error {
+	log.Info("Starting Manager")
+
 	// Load (or generate and save) our UUID
 	if len(m.Config.AgentUUID) == 0 {
 		m.Config.AgentUUID = m.loadOrCreateUUID()
 	}
 
 	// If the incoming configuration is insufficient, attempt to get needed info from file
-	if m.Config.GRPCPort == 0 || len(m.Config.TargetAddress) == 0 {
-		m.Config.GRPCPort, m.Config.TargetAddress = readArgsFile()
+	if m.Config.ServiceFlags.BindPort == 0 || len(m.Config.TargetAddress) == 0 {
+		m.Config.ServiceFlags.BindPort, m.Config.TargetAddress = readArgsFile()
 	}
 
 	// Initialize and start the link discovery controller
@@ -77,14 +68,15 @@ func (m *Manager) Start() error {
 	return nil
 }
 
+// Stop stops the manager
+func (m *Manager) Stop() {
+	log.Infow("Stopping Manager")
+	m.Controller.Stop()
+}
+
 // startSouthboundServer starts the northbound gRPC server
 func (m *Manager) startNorthboundServer() error {
-	cfg := northbound.NewInsecureServerConfig(int16(m.Config.GRPCPort))
-	if !m.Config.NoTLS {
-		northbound.NewServerCfg(m.Config.CAPath, m.Config.KeyPath, m.Config.CertPath, int16(m.Config.GRPCPort),
-			true, northbound.SecurityConfig{})
-	}
-	s := northbound.NewServer(cfg)
+	s := northbound.NewServer(cli.ServerConfigFromFlags(m.Config.ServiceFlags, northbound.SecurityConfig{}))
 	s.AddService(logging.Service{})
 	s.AddService(gnmi.NewService(m.Controller))
 
@@ -99,12 +91,6 @@ func (m *Manager) startNorthboundServer() error {
 		}
 	}()
 	return <-doneCh
-}
-
-// Close kills the manager
-func (m *Manager) Close() {
-	log.Infow("Closing Manager")
-	m.Controller.Stop()
 }
 
 const argsFile = "/etc/link-agent/args"
