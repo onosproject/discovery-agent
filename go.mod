@@ -3,7 +3,7 @@ module github.com/onosproject/link-agent
 go 1.19
 
 require (
-	github.com/onosproject/onos-lib-go v0.10.3
+	github.com/onosproject/onos-lib-go v0.10.4
 	github.com/onosproject/onos-net-lib v0.1.11
 	github.com/openconfig/gnmi v0.0.0-20220920173703-480bf53a74d2
 	github.com/p4lang/p4runtime v1.4.0-rc.5

@@ -46,6 +46,5 @@ func runRootCommand(cmd *cobra.Command, args []string) error {
 		TargetAddress: targetAddress,
 		ServiceFlags:  flags,
 	}
-
 	return cli.RunDaemon(manager.NewManager(cfg))
 }
