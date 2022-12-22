@@ -26,7 +26,7 @@ type Config struct {
 	ServiceFlags  *cli.ServiceEndpointFlags
 }
 
-// Manager single point of entry for the link-agent
+// Manager is a single point of entry for the link-agent
 type Manager struct {
 	cli.Daemon
 	Config     Config
@@ -36,10 +36,7 @@ type Manager struct {
 // NewManager initializes the application manager
 func NewManager(cfg Config) *Manager {
 	log.Infow("Creating manager")
-	mgr := Manager{
-		Config: cfg,
-	}
-	return &mgr
+	return &Manager{Config: cfg}
 }
 
 // Start initializes and starts the link controller and the NB gNMI API.
