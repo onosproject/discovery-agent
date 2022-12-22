@@ -30,7 +30,7 @@ type Config struct {
 type Manager struct {
 	cli.Daemon
 	Config     Config
-	Controller *linkdiscovery.Controller
+	controller *linkdiscovery.Controller
 }
 
 // NewManager initializes the application manager
@@ -54,44 +54,26 @@ func (m *Manager) Start() error {
 	}
 
 	// Initialize and start the link discovery controller
-	m.Controller = linkdiscovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
-	m.Controller.Start()
+	m.controller = linkdiscovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
+	m.controller.Start()
 
 	// Starts NB server
-	err := m.startNorthboundServer()
-	if err != nil {
-		return err
-	}
-	return nil
+	s := northbound.NewServer(cli.ServerConfigFromFlags(m.Config.ServiceFlags, northbound.SecurityConfig{}))
+	s.AddService(logging.Service{})
+	s.AddService(gnmi.NewService(m.controller))
+	return s.StartInBackground()
 }
 
 // Stop stops the manager
 func (m *Manager) Stop() {
 	log.Infow("Stopping Manager")
-	m.Controller.Stop()
+	m.controller.Stop()
 }
 
-// startSouthboundServer starts the northbound gRPC server
-func (m *Manager) startNorthboundServer() error {
-	s := northbound.NewServer(cli.ServerConfigFromFlags(m.Config.ServiceFlags, northbound.SecurityConfig{}))
-	s.AddService(logging.Service{})
-	s.AddService(gnmi.NewService(m.Controller))
-
-	doneCh := make(chan error)
-	go func() {
-		err := s.Serve(func(started string) {
-			log.Info("Started NBI on ", started)
-			close(doneCh)
-		})
-		if err != nil {
-			doneCh <- err
-		}
-	}()
-	return <-doneCh
-}
-
-const argsFile = "/etc/link-agent/args"
-const uuidFile = "/etc/link-agent/uuid"
+const (
+	argsFile = "/etc/link-agent/args"
+	uuidFile = "/etc/link-agent/uuid"
+)
 
 func (m *Manager) loadOrCreateUUID() string {
 	if b, err := os.ReadFile(uuidFile); err == nil {
