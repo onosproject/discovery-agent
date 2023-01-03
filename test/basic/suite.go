@@ -41,7 +41,7 @@ func (s *TestSuite) SetupTestSuite(c *input.Context) error {
 		Release(linkLocalAgentComponentName).
 		Set("image.tag", "latest").
 		Set("global.image.registry", registry).
-		Set("agent.count", 4). // There are 4 devices in plain_small.yaml topology file
+		Set("agent.count", 4). // There are 4 devices in topo.yaml topology file
 		Install(true)
 	if err != nil {
 		return err
@@ -54,5 +54,5 @@ func (s *TestSuite) SetupTestSuite(c *input.Context) error {
 	defer conn.Close()
 
 	// Load topology
-	return topo.LoadTopology(conn, "test/basic/plain_small.yaml")
+	return topo.LoadTopology(conn, "test/basic/topo.yaml")
 }
