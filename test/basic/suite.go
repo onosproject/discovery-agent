@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package basic is a suite of basic functionality tests for the fabric simulator
+// Package basic is a suite of basic functionality tests for the link agent
 package basic
 
 import (
