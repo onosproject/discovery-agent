@@ -63,8 +63,10 @@ func saveConfig(config *Config) {
 }
 
 // Creates a root config tree and populates its "config/" branch with the supplied configuration values.
-func createConfigRoot(config *Config) *configtree.Node {
+func createConfigRoot(agentID string, config *Config) *configtree.Node {
 	root := configtree.NewRoot()
+	root.AddPath("state/agent-id",
+		&gnmi.TypedValue{Value: &gnmi.TypedValue_StringVal{StringVal: agentID}})
 	root.AddPath("config/emitFrequency",
 		&gnmi.TypedValue{Value: &gnmi.TypedValue_IntVal{IntVal: config.EmitFrequency}})
 	root.AddPath("config/maxLinkAge",

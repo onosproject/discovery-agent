@@ -92,7 +92,7 @@ type Link struct {
 func NewController(targetAddress string, agentID string) *Controller {
 	config := loadConfig()
 	ctrl := &Controller{
-		GNMIConfigurable: *configtree.NewGNMIConfigurable(createConfigRoot(config)),
+		GNMIConfigurable: *configtree.NewGNMIConfigurable(createConfigRoot(agentID, config)),
 		TargetAddress:    targetAddress,
 		IngressDeviceID:  agentID,
 		config:           config,
