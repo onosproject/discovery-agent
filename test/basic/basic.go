@@ -135,7 +135,7 @@ func ValidateLinkDiscovery(t *testing.T, id int) {
 
 	assert.NoError(t, err)
 	assert.Len(t, resp.Notification, 1)
-	assert.Len(t, resp.Notification[0].Update, 4*2) // 4 links, with 2 leaves each
+	assert.Len(t, resp.Notification[0].Update, 4*3) // 4 links, with 2 leaves each
 }
 
 // CreateInsecureConnection creates gRPC connection to the specified gRPC end-point

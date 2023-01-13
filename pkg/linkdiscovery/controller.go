@@ -71,13 +71,16 @@ type Controller struct {
 	electionID *p4api.Uint128
 	cookie     uint64
 	role       *p4api.Role
+
+	monitor *portMonitor
 }
 
 // Port holds data about each discovered switch ports
 type Port struct {
-	ID     string
-	Number uint32
-	Status string
+	ID         string
+	Number     uint32
+	Status     string
+	LastChange uint64
 }
 
 // Link holds data about each discovered ingress links
@@ -98,6 +101,7 @@ func NewController(targetAddress string, agentID string) *Controller {
 		config:           config,
 		ports:            make(map[string]*Port),
 		links:            make(map[uint32]*Link),
+		monitor:          &portMonitor{},
 	}
 	ctrl.GNMIConfigurable.Configurable = ctrl
 	return ctrl
@@ -157,12 +161,16 @@ func (c *Controller) pruneLinks() {
 	limit := time.Now().Add(-30 * time.Second)
 	for ingressPort, link := range c.links {
 		if link.LastUpdate.Before(limit) {
-			// Delete the link from our internal structure and from the config tree
-			delete(c.links, ingressPort)
-			c.removeLinkFromTree(ingressPort)
+			c.deleteLink(ingressPort)
 			log.Infof("Pruned stale link: %d <- %s/%d", link.IngressPort, link.EgressDeviceID, link.EgressPort)
 		}
 	}
+}
+
+func (c *Controller) deleteLink(ingressPort uint32) {
+	// Delete the link from our internal structure and from the config tree
+	delete(c.links, ingressPort)
+	c.removeLinkFromTree(ingressPort)
 }
 
 // Get the current operational state

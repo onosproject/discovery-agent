@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/onosproject/onos-net-lib/pkg/gnmiutils"
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
 	"github.com/onosproject/onos-net-lib/pkg/packet"
 	"github.com/openconfig/gnmi/proto/gnmi"
@@ -133,49 +132,6 @@ func (c *Controller) waitForMastershipArbitration() {
 		}
 		c.pauseIf(PipelineConfigAvailable, mastershipArbitrationRetryPause)
 	}
-}
-
-func (c *Controller) discoverPorts() {
-	log.Infof("Discovering ports...")
-	resp, err := c.gnmiClient.Get(c.ctx, &gnmi.GetRequest{
-		Path: []*gnmi.Path{gnmiutils.ToPath("interfaces/interface[name=...]/state")},
-	})
-	if err != nil {
-		log.Warn("Unable to issue gNMI request for port list: %+v", err)
-		c.setStateIf(Elected, Disconnected)
-		return
-	}
-	if len(resp.Notification) == 0 {
-		log.Warn("No port data received")
-		return
-	}
-
-	ports := make(map[string]*Port)
-	for _, update := range resp.Notification[0].Update {
-		port := getPort(ports, update.Path.Elem[1].Key["name"])
-		last := len(update.Path.Elem) - 1
-		switch update.Path.Elem[last].Name {
-		case "id":
-			port.Number = uint32(update.Val.GetUintVal())
-		case "oper-status":
-			port.Status = update.Val.GetStringVal()
-		}
-	}
-
-	c.setStateIf(Elected, PortsDiscovered)
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.ports = ports
-	log.Infof("Ports discovered")
-}
-
-func getPort(ports map[string]*Port, id string) *Port {
-	port, ok := ports[id]
-	if !ok {
-		port = &Port{ID: id}
-		ports[id] = port
-	}
-	return port
 }
 
 func (c *Controller) handlePackets() {

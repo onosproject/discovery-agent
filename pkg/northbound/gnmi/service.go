@@ -29,7 +29,7 @@ func NewService(controller *linkdiscovery.Controller) Service {
 
 // Register registers the server with grpc
 func (s Service) Register(r *grpc.Server) {
-	server := gnmiserver.NewGNMIServer(&s.controller.GNMIConfigurable)
+	server := gnmiserver.NewGNMIServer(&s.controller.GNMIConfigurable, "link-agent")
 	gnmiapi.RegisterGNMIServer(r, server)
 	log.Debug("gNMI API services registered")
 }
