@@ -104,9 +104,12 @@ func (c *Controller) addLinkToTree(ingressPort uint32, egressPort uint32, egress
 	portVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_IntVal{IntVal: int64(egressPort)}}
 	devicePath := fmt.Sprintf("state/link[port=%d]/egress-device", ingressPort)
 	deviceVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_StringVal{StringVal: egressDeviceID}}
+	createTimePath := fmt.Sprintf("state/link[port=%d]/create-time", ingressPort)
+	createTimeVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_UintVal{UintVal: uint64(time.Now().UnixNano())}}
 
 	c.Root().AddPath(portPath, portVal)
 	c.Root().AddPath(devicePath, deviceVal)
+	c.Root().AddPath(createTimePath, createTimeVal)
 
 	// Forward the add notification to any subscribe responders
 	c.SendToAllResponders(&gnmi.SubscribeResponse{Response: &gnmi.SubscribeResponse_Update{
@@ -115,6 +118,7 @@ func (c *Controller) addLinkToTree(ingressPort uint32, egressPort uint32, egress
 			Update: []*gnmi.Update{
 				{Path: gnmiutils.ToPath(portPath), Val: portVal},
 				{Path: gnmiutils.ToPath(devicePath), Val: deviceVal},
+				{Path: gnmiutils.ToPath(createTimePath), Val: createTimeVal},
 			},
 		},
 	}})
