@@ -128,7 +128,7 @@ func (m *portMonitor) monitorPortStatus(c *Controller) {
 			return
 		}
 		log.Infof("Got port status update %+v", resp.GetUpdate())
-		if resp.GetUpdate() != nil && len(resp.GetUpdate().Update) > 0 {
+		if resp.GetUpdate() != nil {
 			for _, update := range resp.GetUpdate().Update {
 				if update.Path.Elem[(len(update.Path.Elem)-1)].Name == "oper-status" {
 					c.processPortStatusUpdate(update.Path.Elem[1].Key["name"], update.Val.GetStringVal())
@@ -147,4 +147,5 @@ func (c *Controller) processPortStatusUpdate(portKey string, newPortStatus strin
 		log.Infof("Deleting any ingress link for port %d", port.Number)
 		c.deleteLink(port.Number)
 	}
+	port.Status = newPortStatus
 }
