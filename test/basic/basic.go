@@ -72,18 +72,27 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 			}},
 	})
 	assert.NoError(t, err)
+	resp, err := subClient.Recv() // Get the sync response first
+	assert.NoError(t, err)
 
 	// Disable the spine1/1 port...
 	t.Log("Disabling port spine1/1...")
 	_, err = deviceClient.DisablePort(ctx, &simapi.DisablePortRequest{ID: "spine1/1"})
 	assert.NoError(t, err)
 
-	resp, err := subClient.Recv() // Get the sync response first
-	assert.NoError(t, err)
 	resp, err = subClient.Recv() // Now get the deletion notification
 	assert.NoError(t, err)
 	assert.Len(t, resp.GetUpdate().Delete, 1)
 	assert.Equal(t, "state/link[port=201]", utils.ToString(resp.GetUpdate().Delete[0]))
+
+	// Now re-enable the spine1/1 port...
+	t.Log("Enabling port spine1/1...")
+	_, err = deviceClient.EnablePort(ctx, &simapi.EnablePortRequest{ID: "spine1/1"})
+	assert.NoError(t, err)
+
+	resp, err = subClient.Recv() // Now get the addition notification
+	assert.NoError(t, err)
+	assert.Equal(t, "201", resp.GetUpdate().Update[0].Path.Elem[1].Key["port"])
 }
 
 // SetPipelineConfig applies the pipeline configuration to the specified device.
