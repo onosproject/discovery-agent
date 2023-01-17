@@ -72,7 +72,7 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 			}},
 	})
 	assert.NoError(t, err)
-	resp, err := subClient.Recv() // Get the sync response first
+	_, err = subClient.Recv() // Get the sync response first
 	assert.NoError(t, err)
 
 	// Disable the spine1/1 port...
@@ -80,7 +80,7 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 	_, err = deviceClient.DisablePort(ctx, &simapi.DisablePortRequest{ID: "spine1/1"})
 	assert.NoError(t, err)
 
-	resp, err = subClient.Recv() // Now get the deletion notification
+	resp, err := subClient.Recv() // Now get the deletion notification
 	assert.NoError(t, err)
 	assert.Len(t, resp.GetUpdate().Delete, 1)
 	assert.Equal(t, "state/link[port=201]", utils.ToString(resp.GetUpdate().Delete[0]))
