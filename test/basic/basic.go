@@ -27,11 +27,8 @@ const onosRoleAgentID = "\x01"
 
 // TestBasics loads fabric simulator with access fabric topology, and tests basic gNMI operations
 func (s *TestSuite) TestBasics(t *testing.T) {
-	conn, err := CreateInsecureConnection("fabric-sim:5150")
-	assert.NoError(t, err)
-
 	// Retrieve device information from the fabric simulator
-	deviceClient := simapi.NewDeviceServiceClient(conn)
+	deviceClient := simapi.NewDeviceServiceClient(s.fsimConn)
 	ctx := context.Background()
 	dresp, err := deviceClient.GetDevices(ctx, &simapi.GetDevicesRequest{})
 	assert.NoError(t, err)
@@ -57,7 +54,36 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 
 	wg.Wait()
 
-	// TODO: add test where we disable port and listen for subsequent link delete events (due to pruning)
+	// Create subscribe connection for links on spine1
+	gconn, err := CreateInsecureConnection("link-local-agent-0.link-local-agent:30000")
+	assert.NoError(t, err)
+	gnmiClient := gnmi.NewGNMIClient(gconn)
+
+	t.Logf("spine1: Subscribing for gNMI notifications...")
+	subClient, err := gnmiClient.Subscribe(ctx)
+	assert.NoError(t, err)
+	err = subClient.Send(&gnmi.SubscribeRequest{
+		Request: &gnmi.SubscribeRequest_Subscribe{
+			Subscribe: &gnmi.SubscriptionList{
+				Subscription:     []*gnmi.Subscription{{Path: utils.ToPath("state/link[port=...]")}},
+				Mode:             gnmi.SubscriptionList_STREAM,
+				AllowAggregation: true,
+				UpdatesOnly:      true,
+			}},
+	})
+	assert.NoError(t, err)
+
+	// Disable the spine1/1 port...
+	t.Log("Disabling port spine1/1...")
+	_, err = deviceClient.DisablePort(ctx, &simapi.DisablePortRequest{ID: "spine1/1"})
+	assert.NoError(t, err)
+
+	resp, err := subClient.Recv() // Get the sync response first
+	assert.NoError(t, err)
+	resp, err = subClient.Recv() // Now get the deletion notification
+	assert.NoError(t, err)
+	assert.Len(t, resp.GetUpdate().Delete, 1)
+	assert.Equal(t, "state/link[port=201]", utils.ToString(resp.GetUpdate().Delete[0]))
 }
 
 // SetPipelineConfig applies the pipeline configuration to the specified device.

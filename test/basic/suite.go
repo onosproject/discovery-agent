@@ -11,6 +11,7 @@ import (
 	"github.com/onosproject/helmit/pkg/input"
 	"github.com/onosproject/helmit/pkg/test"
 	"github.com/onosproject/onos-test/pkg/onostest"
+	"google.golang.org/grpc"
 )
 
 type testSuite struct {
@@ -20,6 +21,7 @@ type testSuite struct {
 // TestSuite is the basic test suite
 type TestSuite struct {
 	testSuite
+	fsimConn *grpc.ClientConn
 }
 
 const fabricSimComponentName = "fabric-sim"
@@ -47,12 +49,11 @@ func (s *TestSuite) SetupTestSuite(c *input.Context) error {
 		return err
 	}
 
-	conn, err := CreateInsecureConnection("fabric-sim:5150")
+	s.fsimConn, err = CreateInsecureConnection("fabric-sim:5150")
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
 
 	// Load topology
-	return topo.LoadTopology(conn, "test/basic/topo.yaml")
+	return topo.LoadTopology(s.fsimConn, "test/basic/topo.yaml")
 }
