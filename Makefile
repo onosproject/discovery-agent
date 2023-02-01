@@ -37,12 +37,8 @@ jenkins-test: # @HELP run the unit tests and source code validation producing a 
 jenkins-test: jenkins-tools mod-lint build linters license
 	TEST_PACKAGES=github.com/onosproject/link-agent/... ./build/build-tools/build/jenkins/make-unit
 
-integration-tests:  # @HELP run helmit integration tests locally
-	(kubectl delete ns test || exit 0) && kubectl create ns test && helmit test -n test -c . ./cmd/link-agent-tests
-
-cit:  # @HELP run helmit integration test under current development
-	#(kubectl delete ns test || exit 0) && kubectl create ns test && helmit test -n test -c . ./cmd/link-agent-tests --suite onoslite --test TestLiteONOSWithPlainMaxFabric
-	(kubectl delete ns test || exit 0) && kubectl create ns test && helmit test -n test -c . ./cmd/link-agent-tests --suite basic --test TestGNMI
+integration-tests: integration-test-namespace # @HELP run helmit integration tests locally
+	make basic -C test
 
 link-agent-docker: mod-update local-deps # @HELP build link-agent base Docker image
 	docker build --platform linux/amd64 . -f build/link-agent/Dockerfile \
