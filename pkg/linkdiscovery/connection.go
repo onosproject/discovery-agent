@@ -7,6 +7,7 @@ package linkdiscovery
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
@@ -170,6 +171,16 @@ func (c *Controller) processPacket(packetIn *p4api.PacketIn) {
 			return
 		}
 		c.updateIngressLink(pim.IngressPort, uint32(egressPort), string(lldp.ChassisID.ID))
+	}
+
+	// if condition to process ARP packet
+	arpLayer := rawPacket.Layer(layers.LayerTypeARP)
+	if arpLayer != nil {
+		pim := c.codec.DecodePacketInMetadata(packetIn.Metadata)
+		arp := arpLayer.(*layers.ARP)
+		// FIXME: pim.RoleAgentID substitutes device.ID - is it correct? Should I abandon it?
+		c.updateHost(packet.MACString(arp.SourceHwAddress), packet.IPString(arp.SourceProtAddress),
+			fmt.Sprintf("%d/%d", pim.RoleAgentID, pim.IngressPort))
 	}
 }
 

@@ -56,6 +56,7 @@ type Controller struct {
 	config *Config
 	ports  map[string]*Port
 	links  map[uint32]*Link
+	hosts  map[string]*Host
 
 	conn       *grpc.ClientConn
 	p4Client   p4api.P4RuntimeClient
@@ -89,6 +90,14 @@ type Link struct {
 	EgressDeviceID string
 	IngressPort    uint32
 	LastUpdate     time.Time
+}
+
+// Host is a simple representation of a host network interface discovered by the ONOS lite
+type Host struct {
+	MAC        string
+	IP         string
+	Port       string
+	LastUpdate time.Time
 }
 
 // NewController creates a new link discovery controller
@@ -173,6 +182,11 @@ func (c *Controller) deleteLink(ingressPort uint32) {
 	c.removeLinkFromTree(ingressPort)
 }
 
+func (c *Controller) deleteHost(macString string) {
+	// Delete the link from our internal structure and from the config tree
+	delete(c.hosts, macString)
+}
+
 // Get the current operational state
 func (c *Controller) getState() State {
 	c.lock.RLock()
@@ -194,6 +208,36 @@ func (c *Controller) setStateIf(condition State, state State) {
 	defer c.lock.Unlock()
 	if c.state == condition {
 		c.state = state
+	}
+}
+
+// FIXME: rework this function
+func (c *Controller) updateHost(macString string, ipString string, port string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if _, ok := c.hosts[macString]; !ok {
+		host := &Host{
+			MAC:  macString,
+			IP:   ipString,
+			Port: port,
+		}
+		host.LastUpdate = time.Now()
+		c.hosts[macString] = host
+		log.Infof("Added a new host: %s <- %s/%s", macString, ipString, port)
+	}
+}
+
+// FIXME: rework this function
+func (c *Controller) pruneHosts() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	limit := time.Now().Add(-30 * time.Minute) // this is to discuss
+	for mac, host := range c.hosts {
+		if host.LastUpdate.Before(limit) {
+			c.deleteHost(mac)
+			log.Infof("Pruned stale host: %s <- %s/%s", host.MAC, host.IP, host.Port)
+		}
 	}
 }
 
@@ -242,6 +286,7 @@ func (c *Controller) enterLinkDiscovery() {
 	tPorts := time.NewTicker(time.Duration(c.config.PortRediscoveryFrequency) * time.Second)
 	tPrune := time.NewTicker(time.Duration(c.config.LinkPruneFrequency) * time.Second)
 
+	// Do I have to emit ARP packets here? I guess so...
 	for c.getState() == Configured {
 		select {
 		// Periodically emit LLDP packets
@@ -259,6 +304,7 @@ func (c *Controller) enterLinkDiscovery() {
 		// Periodically prune links
 		case <-tPrune.C:
 			c.pruneLinks()
+			c.pruneHosts()
 		}
 	}
 }
