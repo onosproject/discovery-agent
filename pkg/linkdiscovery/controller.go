@@ -96,7 +96,7 @@ type Link struct {
 type Host struct {
 	MAC        string
 	IP         string
-	Port       string
+	Port       uint32
 	LastUpdate time.Time
 }
 
@@ -185,6 +185,7 @@ func (c *Controller) deleteLink(ingressPort uint32) {
 func (c *Controller) deleteHost(macString string) {
 	// Delete the link from our internal structure and from the config tree
 	delete(c.hosts, macString)
+	c.removeHostFromTree(macString)
 }
 
 // Get the current operational state
@@ -211,24 +212,23 @@ func (c *Controller) setStateIf(condition State, state State) {
 	}
 }
 
-// FIXME: rework this function
-func (c *Controller) updateHost(macString string, ipString string, port string) {
+func (c *Controller) updateHost(macString string, ipString string, port uint32) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-
-	if _, ok := c.hosts[macString]; !ok {
-		host := &Host{
+	host, ok := c.hosts[macString]
+	if !ok || host.MAC != macString || host.IP != ipString || host.Port != port {
+		host = &Host{
 			MAC:  macString,
 			IP:   ipString,
 			Port: port,
 		}
-		host.LastUpdate = time.Now()
 		c.hosts[macString] = host
-		log.Infof("Added a new host: %s <- %s/%s", macString, ipString, port)
+		log.Infof("Added a new host: %s <- %s/%d", macString, ipString, port)
+		c.addHostToTree(macString, ipString, port)
 	}
+	host.LastUpdate = time.Now()
 }
 
-// FIXME: rework this function
 func (c *Controller) pruneHosts() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -252,13 +252,13 @@ func (c *Controller) run() {
 		case PipelineConfigAvailable:
 			c.waitForMastershipArbitration()
 		case Elected:
-			c.discoverPorts()
+			c.discoverPorts() // should I change the naming here??
 		case PortsDiscovered:
-			c.setupForLinkDiscovery()
+			c.setupForDiscovery()
 		case Configured:
-			c.enterLinkDiscovery()
+			c.enterDiscovery()
 		case Reconfigured:
-			c.reenterLinkDiscovery()
+			c.reenterDiscovery()
 		}
 	}
 	log.Infof("Stopped")
@@ -271,16 +271,16 @@ func (c *Controller) pauseIf(condition State, pause time.Duration) {
 	}
 }
 
-func (c *Controller) setupForLinkDiscovery() {
+func (c *Controller) setupForDiscovery() {
 	// Program intercept rule(s)
-	c.programPacketInterceptRule()
+	c.programPacketInterceptRules()
 	c.setState(Configured)
 
 	// Setup packet-in handler
 	go c.handlePackets()
 }
 
-func (c *Controller) enterLinkDiscovery() {
+func (c *Controller) enterDiscovery() {
 	tLinks := time.NewTicker(time.Duration(c.config.EmitFrequency) * time.Second)
 	tConf := time.NewTicker(time.Duration(c.config.PipelineValidationFrequency) * time.Second)
 	tPorts := time.NewTicker(time.Duration(c.config.PortRediscoveryFrequency) * time.Second)
@@ -309,6 +309,6 @@ func (c *Controller) enterLinkDiscovery() {
 	}
 }
 
-func (c *Controller) reenterLinkDiscovery() {
+func (c *Controller) reenterDiscovery() {
 	c.setState(Configured)
 }

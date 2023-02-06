@@ -136,3 +136,41 @@ func (c *Controller) removeLinkFromTree(ingressPort uint32) {
 		},
 	}})
 }
+
+func (c *Controller) addHostToTree(macString string, ipString string, port uint32) {
+	portPath := fmt.Sprintf("state/host[mac=%s]/port", macString)
+	portVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_IntVal{IntVal: int64(port)}}
+	ipPath := fmt.Sprintf("state/link[mac=%s]/ip-address", macString)
+	ipVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_StringVal{StringVal: ipString}}
+	createTimePath := fmt.Sprintf("state/link[mac=%s]/create-time", macString)
+	createTimeVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_UintVal{UintVal: uint64(time.Now().UnixNano())}}
+
+	c.Root().AddPath(portPath, portVal)
+	c.Root().AddPath(ipPath, ipVal)
+	c.Root().AddPath(createTimePath, createTimeVal)
+
+	// Forward the add notification to any subscribe responders
+	c.SendToAllResponders(&gnmi.SubscribeResponse{Response: &gnmi.SubscribeResponse_Update{
+		Update: &gnmi.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Update: []*gnmi.Update{
+				{Path: gnmiutils.ToPath(portPath), Val: portVal},
+				{Path: gnmiutils.ToPath(ipPath), Val: ipVal},
+				{Path: gnmiutils.ToPath(createTimePath), Val: createTimeVal},
+			},
+		},
+	}})
+}
+
+func (c *Controller) removeHostFromTree(macString string) {
+	path := fmt.Sprintf("state/host[mac=%s]", macString)
+	_ = c.Root().DeletePath(path)
+
+	// Forward the delete notification to any subscribe responders
+	c.SendToAllResponders(&gnmi.SubscribeResponse{Response: &gnmi.SubscribeResponse_Update{
+		Update: &gnmi.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Delete:    []*gnmi.Path{gnmiutils.ToPath(path)},
+		},
+	}})
+}

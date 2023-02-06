@@ -7,7 +7,6 @@ package linkdiscovery
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/onosproject/onos-net-lib/pkg/p4utils"
@@ -178,13 +177,11 @@ func (c *Controller) processPacket(packetIn *p4api.PacketIn) {
 	if arpLayer != nil {
 		pim := c.codec.DecodePacketInMetadata(packetIn.Metadata)
 		arp := arpLayer.(*layers.ARP)
-		// FIXME: pim.RoleAgentID substitutes device.ID - is it correct? Should I abandon it?
-		c.updateHost(packet.MACString(arp.SourceHwAddress), packet.IPString(arp.SourceProtAddress),
-			fmt.Sprintf("%d/%d", pim.RoleAgentID, pim.IngressPort))
+		c.updateHost(packet.MACString(arp.SourceHwAddress), packet.IPString(arp.SourceProtAddress), pim.IngressPort)
 	}
 }
 
-func (c *Controller) programPacketInterceptRule() {
+func (c *Controller) programPacketInterceptRules() {
 	aclTable := p4utils.FindTable(c.info, "FabricIngress.acl.acl")
 	puntAction := p4utils.FindAction(c.info, "FabricIngress.acl.punt_to_cpu")
 
@@ -204,7 +201,13 @@ func (c *Controller) programPacketInterceptRule() {
 		return
 	}
 
-	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id); err != nil {
+	// installing punt rule for LLDP
+	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id, false); err != nil {
+		log.Warnf("Unable to install LLDP intercept rule: %+v", err)
+	}
+
+	// installing punt rule for ARP
+	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id, true); err != nil {
 		log.Warnf("Unable to install LLDP intercept rule: %+v", err)
 	}
 }
@@ -231,10 +234,13 @@ func (c *Controller) emitLLDPPackets() {
 	log.Info("LLDP packets emitted")
 }
 
-func (c *Controller) installPuntRule(tableID uint32, actionID uint32, ethTypeMatchFieldID uint32, setRoleAgentParamID uint32) error {
+func (c *Controller) installPuntRule(tableID uint32, actionID uint32, ethTypeMatchFieldID uint32, setRoleAgentParamID uint32, arp bool) error {
 	ethTypeValue := []byte{0, 0}
-	binary.BigEndian.PutUint16(ethTypeValue, uint16(layers.EthernetTypeLinkLayerDiscovery))
-
+	if arp {
+		binary.BigEndian.PutUint16(ethTypeValue, uint16(layers.EthernetTypeARP))
+	} else {
+		binary.BigEndian.PutUint16(ethTypeValue, uint16(layers.EthernetTypeLinkLayerDiscovery))
+	}
 	_, err := c.p4Client.Write(c.ctx, &p4api.WriteRequest{
 		DeviceId:   c.chassisID,
 		Role:       linkAgentRoleName,
