@@ -7,7 +7,7 @@ package manager
 
 import (
 	"github.com/google/uuid"
-	"github.com/onosproject/link-agent/pkg/linkdiscovery"
+	"github.com/onosproject/link-agent/pkg/discovery"
 	"github.com/onosproject/link-agent/pkg/northbound/gnmi"
 	"github.com/onosproject/onos-lib-go/pkg/cli"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
@@ -30,7 +30,7 @@ type Config struct {
 type Manager struct {
 	cli.Daemon
 	Config     Config
-	controller *linkdiscovery.Controller
+	controller *discovery.Controller
 }
 
 // NewManager initializes the application manager
@@ -54,7 +54,7 @@ func (m *Manager) Start() error {
 	}
 
 	// Initialize and start the link discovery controller
-	m.controller = linkdiscovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
+	m.controller = discovery.NewController(m.Config.TargetAddress, m.Config.AgentUUID)
 	m.controller.Start()
 
 	// Starts NB server

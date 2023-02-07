@@ -6,7 +6,7 @@
 package gnmi
 
 import (
-	"github.com/onosproject/link-agent/pkg/linkdiscovery"
+	"github.com/onosproject/link-agent/pkg/discovery"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
 	"github.com/onosproject/onos-net-lib/pkg/gnmiserver"
@@ -19,11 +19,11 @@ var log = logging.GetLogger("northbound", "gnmi")
 // Service implements the link agent NB gRPC
 type Service struct {
 	northbound.Service
-	controller *linkdiscovery.Controller
+	controller *discovery.Controller
 }
 
 // NewService allocates a Service struct with the given parameters
-func NewService(controller *linkdiscovery.Controller) Service {
+func NewService(controller *discovery.Controller) Service {
 	return Service{controller: controller}
 }
 

@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package linkdiscovery implements the link discovery control logic
-package linkdiscovery
+// Package discovery implements the link and host discovery control logic
+package discovery
 
 import (
 	"context"
@@ -56,6 +56,7 @@ type Controller struct {
 	config *Config
 	ports  map[string]*Port
 	links  map[uint32]*Link
+	hosts  map[string]*Host
 
 	conn       *grpc.ClientConn
 	p4Client   p4api.P4RuntimeClient
@@ -89,6 +90,14 @@ type Link struct {
 	EgressDeviceID string
 	IngressPort    uint32
 	LastUpdate     time.Time
+}
+
+// Host is a simple representation of a host network interface discovered by the ONOS lite
+type Host struct {
+	MAC        string
+	IP         string
+	Port       uint32
+	LastUpdate time.Time
 }
 
 // NewController creates a new link discovery controller
@@ -173,6 +182,12 @@ func (c *Controller) deleteLink(ingressPort uint32) {
 	c.removeLinkFromTree(ingressPort)
 }
 
+func (c *Controller) deleteHost(macString string) {
+	// Delete the link from our internal structure and from the config tree
+	delete(c.hosts, macString)
+	c.removeHostFromTree(macString)
+}
+
 // Get the current operational state
 func (c *Controller) getState() State {
 	c.lock.RLock()
@@ -197,6 +212,35 @@ func (c *Controller) setStateIf(condition State, state State) {
 	}
 }
 
+func (c *Controller) updateHost(macString string, ipString string, port uint32) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	host, ok := c.hosts[macString]
+	if !ok || host.MAC != macString || host.IP != ipString || host.Port != port {
+		host = &Host{
+			MAC:  macString,
+			IP:   ipString,
+			Port: port,
+		}
+		c.hosts[macString] = host
+		log.Infof("Added a new host: %s <- %s/%d", macString, ipString, port)
+		c.addHostToTree(macString, ipString, port)
+	}
+	host.LastUpdate = time.Now()
+}
+
+func (c *Controller) pruneHosts() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	limit := time.Now().Add(-30 * time.Minute) // this is to discuss
+	for mac, host := range c.hosts {
+		if host.LastUpdate.Before(limit) {
+			c.deleteHost(mac)
+			log.Infof("Pruned stale host: %s <- %s/%s", host.MAC, host.IP, host.Port)
+		}
+	}
+}
+
 func (c *Controller) run() {
 	log.Infof("Started")
 	for state := c.getState(); state != Stopped; state = c.getState() {
@@ -208,13 +252,13 @@ func (c *Controller) run() {
 		case PipelineConfigAvailable:
 			c.waitForMastershipArbitration()
 		case Elected:
-			c.discoverPorts()
+			c.discoverPorts() // should I change the naming here??
 		case PortsDiscovered:
-			c.setupForLinkDiscovery()
+			c.setupForDiscovery()
 		case Configured:
-			c.enterLinkDiscovery()
+			c.enterDiscovery()
 		case Reconfigured:
-			c.reenterLinkDiscovery()
+			c.reenterDiscovery()
 		}
 	}
 	log.Infof("Stopped")
@@ -227,21 +271,22 @@ func (c *Controller) pauseIf(condition State, pause time.Duration) {
 	}
 }
 
-func (c *Controller) setupForLinkDiscovery() {
+func (c *Controller) setupForDiscovery() {
 	// Program intercept rule(s)
-	c.programPacketInterceptRule()
+	c.programPacketInterceptRules()
 	c.setState(Configured)
 
 	// Setup packet-in handler
 	go c.handlePackets()
 }
 
-func (c *Controller) enterLinkDiscovery() {
+func (c *Controller) enterDiscovery() {
 	tLinks := time.NewTicker(time.Duration(c.config.EmitFrequency) * time.Second)
 	tConf := time.NewTicker(time.Duration(c.config.PipelineValidationFrequency) * time.Second)
 	tPorts := time.NewTicker(time.Duration(c.config.PortRediscoveryFrequency) * time.Second)
 	tPrune := time.NewTicker(time.Duration(c.config.LinkPruneFrequency) * time.Second)
 
+	// Do I have to emit ARP packets here? I guess so...
 	for c.getState() == Configured {
 		select {
 		// Periodically emit LLDP packets
@@ -259,10 +304,11 @@ func (c *Controller) enterLinkDiscovery() {
 		// Periodically prune links
 		case <-tPrune.C:
 			c.pruneLinks()
+			c.pruneHosts()
 		}
 	}
 }
 
-func (c *Controller) reenterLinkDiscovery() {
+func (c *Controller) reenterDiscovery() {
 	c.setState(Configured)
 }
