@@ -25,7 +25,7 @@ type TestSuite struct {
 }
 
 const fabricSimComponentName = "fabric-sim"
-const linkLocalAgentComponentName = "discovery-agent"
+const discoveryAgentComponentName = "discovery-agent"
 
 // SetupTestSuite sets up the link agent basic test suite using fabric-sim
 func (s *TestSuite) SetupTestSuite(c *input.Context) error {
@@ -39,8 +39,8 @@ func (s *TestSuite) SetupTestSuite(c *input.Context) error {
 		return err
 	}
 
-	err = helm.Chart(linkLocalAgentComponentName, onostest.OnosChartRepo).
-		Release(linkLocalAgentComponentName).
+	err = helm.Chart(discoveryAgentComponentName, onostest.OnosChartRepo).
+		Release(discoveryAgentComponentName).
 		Set("image.tag", "latest").
 		Set("global.image.registry", registry).
 		Set("agent.count", 4). // There are 4 devices in topo.yaml topology file
