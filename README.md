@@ -4,11 +4,14 @@ SPDX-FileCopyrightText: 2022 Intel Corporation
 SPDX-License-Identifier: Apache-2.0
 -->
 
-# link-agent
-Switch local agent responsible for discovery of ingress links via LLDP packets (µONOS Architecture)
+# discovery-agent
+Switch local agent responsible for discovery of ingress links via LLDP packets and hosts via ARP packets (µONOS Architecture).
 
 ##  Motivation
-The primary purpose of the link local agent is to support µONOS scalability goals by decentralizing the link discovery via LLDP packet emissions and intercepts. It emits LLDP packets to be seen by link agents of the neighboring devices and intercepts incoming LLDP packets emitted by them. It allows centralized link discovery to obtain the learned ingress links via gNMI. Reasonable steps will be taken to allow this component to be used in context outside of µONOS architecture.
+The primary purpose of the link local agent is to support µONOS scalability goals by decentralizing the host discovery via ARP packets listening and 
+link discovery via LLDP packet emissions and intercepts. It emits LLDP packets to be seen by link agents of the neighboring devices and intercepts incoming 
+LLDP packets emitted by them. It allows centralized link discovery to obtain the learned ingress links via gNMI. Reasonable steps will be taken to allow this 
+component to be used in context outside of µONOS architecture.
 
 ## Operation
 The basic operation of the link local agent can be summarized as follows:
@@ -18,11 +21,11 @@ The basic operation of the link local agent can be summarized as follows:
 + On start, if one hasn't been supplied explicitly, the agent will load its UUID
   + If one hasn’t been saved yet, it will generate one and save it
 + Agent will start its gNMI server
-  +	get requests will allow reading agent UUID and link inventory state
-  +	subscribe requests will allow streaming of link inventory state updates
-  +	set requests will allow customizing link agent operation:
-    + LLDP emit frequency, link stale age, port exclusions, etc.
-+ Agent will start its link discovery controller, or controller for short
+  +	get requests will allow reading agent UUID and link and host inventory state
+  +	subscribe requests will allow streaming of link and host inventory state updates
+  +	set requests will allow customizing discovery agent operation:
+    + LLDP emit frequency, link stale age, port/host exclusions, etc.
++ Agent will start its link and host discovery controller, or controller for short
   + `Disconnected` state
 + The controller will establish P4Runtime connection to the Stratum agent
     + It will block until connection established, transitioning to `Connected` state 
@@ -40,14 +43,16 @@ The basic operation of the link local agent can be summarized as follows:
 + Independently, after mastership is negotiated, the controller will learn Stratum ports via gNMI get `interfaces/interface[name=...]/state`, searching for `id` and `oper-status`
    + Port discovery will be re-run periodically (say every minute or so) to detect new chassis configuration
   + On success, the controller will transition to `PortsDiscovered` state
-+ Once ports are initially discovered, controller will start to process LLDP packet-in notifications and convert these into ingress link records and periodically emit LLDP packet-out requests on all ports.
-   + Controller will emit LLDP packets only; no BDDP packets
-+ Periodically, stale ingress links will be pruned
-   + Stale means link exists, but last LLDP was packet received too long ago
-   + Bypass the pruning action when link stale age parameter is set to 0
-+ Any changes/updates to the link inventory state will be forwarded onto any existing subscriber streams
-   + Only events for new and deleted/stale links will be sent
++ Once ports are initially discovered, controller will start to process LLDP and ARP packet-in notifications. They will be converted into ingress link records and host records. 
+Controller will periodically emit LLDP packet-out requests on all ports.
+   + Controller will emit LLDP packets only; no BDDP or ARP packets
++ Periodically, stale ingress links and stale hosts will be pruned
+   + Stale means link (or host) exists, but last LLDP (or ARP) packet was received too long ago
+   + Bypass the pruning action when link (or host) stale age parameter is set to 0
++ Any changes/updates to the link or host inventory state will be forwarded onto any existing subscriber streams
+   + Only events for new and deleted/stale links and hosts will be sent
    + Link will be expressed as a tuple of (ingress port ID, egress port ID, egress device UUID) where port ID is a number, not the port name; ingress device UUID is implied
+   + Host will be expressed as a tuple of (MAC, IP and Port)
 
 ## Miscellaneous Notes
 + gNMI set may need to allow for ports and links to be injected in support of IPU deployments (this is one possible solution to the IPU limitations)
