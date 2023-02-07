@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package linkdiscovery
+package discovery
 
 import (
 	"fmt"

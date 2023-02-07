@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Package linkdiscovery implements the link discovery control logic
-package linkdiscovery
+// Package discovery implements the link and host discovery control logic
+package discovery
 
 import (
 	"context"

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-package linkdiscovery
+package discovery
 
 import (
 	"context"
@@ -202,13 +202,13 @@ func (c *Controller) programPacketInterceptRules() {
 	}
 
 	// installing punt rule for LLDP
-	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id, false); err != nil {
+	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id, layers.EthernetTypeLinkLayerDiscovery); err != nil {
 		log.Warnf("Unable to install LLDP intercept rule: %+v", err)
 	}
 
 	// installing punt rule for ARP
-	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id, true); err != nil {
-		log.Warnf("Unable to install LLDP intercept rule: %+v", err)
+	if err := c.installPuntRule(aclTable.Preamble.Id, puntAction.Preamble.Id, ethTypeMatchField.Id, setAgentRoleActionParam.Id, layers.EthernetTypeARP); err != nil {
+		log.Warnf("Unable to install ARP intercept rule: %+v", err)
 	}
 }
 
@@ -234,13 +234,9 @@ func (c *Controller) emitLLDPPackets() {
 	log.Info("LLDP packets emitted")
 }
 
-func (c *Controller) installPuntRule(tableID uint32, actionID uint32, ethTypeMatchFieldID uint32, setRoleAgentParamID uint32, arp bool) error {
+func (c *Controller) installPuntRule(tableID uint32, actionID uint32, ethTypeMatchFieldID uint32, setRoleAgentParamID uint32, ethType layers.EthernetType) error {
 	ethTypeValue := []byte{0, 0}
-	if arp {
-		binary.BigEndian.PutUint16(ethTypeValue, uint16(layers.EthernetTypeARP))
-	} else {
-		binary.BigEndian.PutUint16(ethTypeValue, uint16(layers.EthernetTypeLinkLayerDiscovery))
-	}
+	binary.BigEndian.PutUint16(ethTypeValue, uint16(ethType))
 	_, err := c.p4Client.Write(c.ctx, &p4api.WriteRequest{
 		DeviceId:   c.chassisID,
 		Role:       linkAgentRoleName,
