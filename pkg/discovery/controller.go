@@ -252,7 +252,7 @@ func (c *Controller) run() {
 		case PipelineConfigAvailable:
 			c.waitForMastershipArbitration()
 		case Elected:
-			c.discoverPorts() // should I change the naming here??
+			c.discoverPorts()
 		case PortsDiscovered:
 			c.setupForDiscovery()
 		case Configured:
