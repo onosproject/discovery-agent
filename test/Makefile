@@ -10,5 +10,5 @@ export GO111MODULE=on
 .PHONY: basic
 
 basic: # @HELP run helmit basic tests locally
-	helmit test -n test ./link-agent-tests -c .. --suite basic --no-teardown
+	helmit test -n test ./discovery-agent-tests -c .. --suite basic --no-teardown
 

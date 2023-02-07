@@ -6,7 +6,7 @@
 package gnmi
 
 import (
-	"github.com/onosproject/link-agent/pkg/discovery"
+	"github.com/onosproject/discovery-agent/pkg/discovery"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
 	"github.com/onosproject/onos-net-lib/pkg/gnmiserver"
@@ -29,7 +29,7 @@ func NewService(controller *discovery.Controller) Service {
 
 // Register registers the server with grpc
 func (s Service) Register(r *grpc.Server) {
-	server := gnmiserver.NewGNMIServer(&s.controller.GNMIConfigurable, "link-agent")
+	server := gnmiserver.NewGNMIServer(&s.controller.GNMIConfigurable, "discovery-agent")
 	gnmiapi.RegisterGNMIServer(r, server)
 	log.Debug("gNMI API services registered")
 }

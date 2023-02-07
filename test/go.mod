@@ -1,4 +1,4 @@
-module github.com/onosproject/link-agent/test
+module github.com/onosproject/discovery-agent/test
 
 go 1.19
 

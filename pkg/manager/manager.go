@@ -7,8 +7,8 @@ package manager
 
 import (
 	"github.com/google/uuid"
-	"github.com/onosproject/link-agent/pkg/discovery"
-	"github.com/onosproject/link-agent/pkg/northbound/gnmi"
+	"github.com/onosproject/discovery-agent/pkg/discovery"
+	"github.com/onosproject/discovery-agent/pkg/northbound/gnmi"
 	"github.com/onosproject/onos-lib-go/pkg/cli"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/onosproject/onos-lib-go/pkg/northbound"
@@ -26,7 +26,7 @@ type Config struct {
 	ServiceFlags  *cli.ServiceEndpointFlags
 }
 
-// Manager is a single point of entry for the link-agent
+// Manager is a single point of entry for the discovery-agent
 type Manager struct {
 	cli.Daemon
 	Config     Config
@@ -71,8 +71,8 @@ func (m *Manager) Stop() {
 }
 
 const (
-	argsFile = "/etc/link-agent/args"
-	uuidFile = "/etc/link-agent/uuid"
+	argsFile = "/etc/discovery-agent/args"
+	uuidFile = "/etc/discovery-agent/uuid"
 )
 
 func (m *Manager) loadOrCreateUUID() string {

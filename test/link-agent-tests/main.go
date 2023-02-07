@@ -6,9 +6,9 @@
 package main
 
 import (
+	"github.com/onosproject/discovery-agent/test/basic"
 	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/test"
-	"github.com/onosproject/link-agent/test/basic"
 )
 
 func main() {

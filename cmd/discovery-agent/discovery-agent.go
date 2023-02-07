@@ -6,7 +6,7 @@
 package main
 
 import (
-	"github.com/onosproject/link-agent/pkg/manager"
+	"github.com/onosproject/discovery-agent/pkg/manager"
 	"github.com/onosproject/onos-lib-go/pkg/cli"
 	"github.com/onosproject/onos-lib-go/pkg/logging"
 	"github.com/spf13/cobra"
@@ -22,7 +22,7 @@ const (
 // The main entry point
 func main() {
 	cmd := &cobra.Command{
-		Use:  "link-agent",
+		Use:  "discovery-agent",
 		RunE: runRootCommand,
 	}
 	cmd.Flags().String(uuidFlag, "", "externally assigned UUID of this agent; if omitted, one will be auto-generated")
@@ -40,7 +40,7 @@ func runRootCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	log.Infof("Starting link-agent")
+	log.Infof("Starting discovery-agent")
 	cfg := manager.Config{
 		AgentUUID:     agentUUID,
 		TargetAddress: targetAddress,

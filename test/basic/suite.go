@@ -25,7 +25,7 @@ type TestSuite struct {
 }
 
 const fabricSimComponentName = "fabric-sim"
-const linkLocalAgentComponentName = "link-local-agent"
+const linkLocalAgentComponentName = "discovery-agent"
 
 // SetupTestSuite sets up the link agent basic test suite using fabric-sim
 func (s *TestSuite) SetupTestSuite(c *input.Context) error {
