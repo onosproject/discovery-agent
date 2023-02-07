@@ -27,28 +27,28 @@ local-deps: local-helmit local-onos-api local-onos-lib-go local-onos-test
 
 build: # @HELP build the Go binaries and run all validations (default)
 build: mod-update local-deps
-	go build -mod=vendor -o build/_output/link-agent ./cmd/link-agent
+	go build -mod=vendor -o build/_output/discovery-agent ./cmd/discovery-agent
 
 test: # @HELP run the unit tests and source code validation producing a golang style report
 test: mod-lint build linters license
-	go test -race github.com/onosproject/link-agent/...
+	go test -race github.com/onosproject/discovery-agent/...
 
 jenkins-test: # @HELP run the unit tests and source code validation producing a junit style report for Jenkins
 jenkins-test: jenkins-tools mod-lint build linters license
-	TEST_PACKAGES=github.com/onosproject/link-agent/... ./build/build-tools/build/jenkins/make-unit
+	TEST_PACKAGES=github.com/onosproject/discovery-agent/... ./build/build-tools/build/jenkins/make-unit
 
 integration-tests: integration-test-namespace # @HELP run helmit integration tests locally
 	make basic -C test
 
-link-agent-docker: mod-update local-deps # @HELP build link-agent base Docker image
-	docker build --platform linux/amd64 . -f build/link-agent/Dockerfile \
-		-t ${DOCKER_REPOSITORY}link-agent:${LINK_AGENT_VERSION}
+discovery-agent-docker: mod-update local-deps # @HELP build discovery-agent base Docker image
+	docker build --platform linux/amd64 . -f build/discovery-agent/Dockerfile \
+		-t ${DOCKER_REPOSITORY}discovery-agent:${LINK_AGENT_VERSION}
 
 images: # @HELP build all Docker images
-images: link-agent-docker
+images: discovery-agent-docker
 
 docker-push-latest: docker-login
-	docker push onosproject/link-agent:latest
+	docker push onosproject/discovery-agent:latest
 
 kind: # @HELP build Docker images and add them to the currently configured kind cluster
 kind: images kind-only
@@ -56,20 +56,20 @@ kind: images kind-only
 kind-only: # @HELP deploy the image without rebuilding first
 kind-only:
 	@if [ "`kind get clusters`" = '' ]; then echo "no kind cluster found" && exit 1; fi
-	kind load docker-image --name ${KIND_CLUSTER_NAME} ${DOCKER_REPOSITORY}link-agent:${LINK_AGENT_VERSION}
+	kind load docker-image --name ${KIND_CLUSTER_NAME} ${DOCKER_REPOSITORY}discovery-agent:${LINK_AGENT_VERSION}
 
 all: build images
 
 publish: # @HELP publish version on github and dockerhub
-	./build/build-tools/publish-version ${VERSION} onosproject/link-agent
+	./build/build-tools/publish-version ${VERSION} onosproject/discovery-agent
 
 jenkins-publish: images docker-push-latest # @HELP Jenkins calls this to publish artifacts
 	./build/build-tools/release-merge-commit
 	./build/build-tools/build/docs/push-docs
 
 clean:: # @HELP remove all the build artifacts
-	rm -rf ./build/_output ./vendor ./cmd/link-agent/link-agent ./cmd/onos/onos
-	go clean -testcache github.com/onosproject/link-agent/...
+	rm -rf ./build/_output ./vendor ./cmd/discovery-agent/discovery-agent ./cmd/onos/onos
+	go clean -testcache github.com/onosproject/discovery-agent/...
 
 local-helmit: # @HELP Copies a local version of the helmit dependency into the vendor directory
 ifdef LOCAL_HELMIT

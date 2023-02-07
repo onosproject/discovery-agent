@@ -16,7 +16,7 @@ component to be used in context outside of µONOS architecture.
 ## Operation
 The basic operation of the link local agent can be summarized as follows:
 
-![states](docs/link-agent-states.png)
+![states](docs/discovery-agent-states.png)
 
 + On start, if one hasn't been supplied explicitly, the agent will load its UUID
   + If one hasn’t been saved yet, it will generate one and save it

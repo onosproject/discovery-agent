@@ -55,7 +55,7 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 	wg.Wait()
 
 	// Create subscribe connection for links on spine1
-	gconn, err := CreateInsecureConnection("link-local-agent-0.link-local-agent:30000")
+	gconn, err := CreateInsecureConnection("discovery-agent-0.discovery-agent:30000")
 	assert.NoError(t, err)
 	gnmiClient := gnmi.NewGNMIClient(gconn)
 
@@ -135,7 +135,7 @@ func SetPipelineConfig(t *testing.T, id int, device *simapi.Device, info *p4info
 // ValidateLinkDiscovery validates that all links get discovered
 func ValidateLinkDiscovery(t *testing.T, id int) {
 	t.Logf("Creating gNMI connection for agent %d", id)
-	gconn, err := CreateInsecureConnection(fmt.Sprintf("link-local-agent-%d.link-local-agent:30000", id))
+	gconn, err := CreateInsecureConnection(fmt.Sprintf("discovery-agent-%d.discovery-agent:30000", id))
 	assert.NoError(t, err)
 	gnmiClient := gnmi.NewGNMIClient(gconn)
 

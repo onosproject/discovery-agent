@@ -15,14 +15,14 @@ COPY ./go.mod /build
 COPY ./go.sum /build
 
 # build the executable(s)
-RUN go build -mod=vendor -o build/_output/link-agent ./cmd/link-agent
+RUN go build -mod=vendor -o build/_output/discovery-agent ./cmd/discovery-agent
 
 FROM alpine:3.13
 RUN apk add libc6-compat
-RUN mkdir -p /etc/link-agent && chmod 777 /etc/link-agent
+RUN mkdir -p /etc/discovery-agent && chmod 777 /etc/discovery-agent
 
 USER nobody
 
-COPY --from=build /build/build/_output/link-agent /usr/local/bin/link-agent
+COPY --from=build /build/build/_output/discovery-agent /usr/local/bin/discovery-agent
 
-ENTRYPOINT ["link-agent"]
+ENTRYPOINT ["discovery-agent"]
