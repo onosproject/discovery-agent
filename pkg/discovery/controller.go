@@ -110,6 +110,7 @@ func NewController(targetAddress string, agentID string) *Controller {
 		config:           config,
 		ports:            make(map[string]*Port),
 		links:            make(map[uint32]*Link),
+		hosts:            make(map[string]*Host),
 		monitor:          &portMonitor{},
 	}
 	ctrl.GNMIConfigurable.Configurable = ctrl
