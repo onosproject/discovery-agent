@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -95,18 +96,15 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 	assert.Equal(t, "201", resp.GetUpdate().Update[0].Path.Elem[1].Key["port"])
 
 	wg2 := sync.WaitGroup{}
-	wg2.Add(5) // setting counter to 5 (until at least 5 hosts are found..)
+	wg2.Add(20) // setting counter to 20 (until all 20 hosts are found..)
 
 	for i, device := range dresp.Devices {
-		go func(id int, d *simapi.Device) {
-			SetPipelineConfig(t, id, d, info)
-			wg2.Done()
-		}(i, device)
-
-		go func(id int) {
-			ValidateHostDiscovery(t, id)
-			wg2.Done()
-		}(i)
+		if strings.HasPrefix(string(device.GetID()), "leaf") {
+			go func(id int) {
+				ValidateHostDiscovery(t, id)
+				wg2.Done()
+			}(i)
+		}
 	}
 	wg2.Wait()
 }
@@ -225,12 +223,12 @@ func ValidateHostDiscovery(t *testing.T, id int) {
 	})
 	assert.NoError(t, err)
 
-	// Wait until we get 8 host updates total
-	for i := 0; i < 8; {
+	// Wait until we get 20 host updates (and 40 links updates, 60 updates in total)
+	for i := 0; i < 60; {
 		sresp, err1 := subClient.Recv()
 		assert.NoError(t, err1)
 		i += len(sresp.GetUpdate().Update)
-		t.Logf("%d: Received update: %+v", id, sresp)
+		//t.Logf("%d: Received update: %+v", id, sresp)
 	}
 
 	// Check basic queries to start
@@ -242,5 +240,5 @@ func ValidateHostDiscovery(t *testing.T, id int) {
 
 	assert.NoError(t, err)
 	assert.Len(t, resp.Notification, 1)
-	assert.Len(t, resp.Notification[0].Update, 3) // 3 hosts
+	assert.Len(t, resp.Notification[0].Update, 20) // 3 hosts
 }
