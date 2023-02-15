@@ -140,9 +140,9 @@ func (c *Controller) removeLinkFromTree(ingressPort uint32) {
 func (c *Controller) addHostToTree(macString string, ipString string, port uint32) {
 	portPath := fmt.Sprintf("state/host[mac=%s]/port", macString)
 	portVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_IntVal{IntVal: int64(port)}}
-	ipPath := fmt.Sprintf("state/link[mac=%s]/ip-address", macString)
+	ipPath := fmt.Sprintf("state/host[mac=%s]/ip-address", macString)
 	ipVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_StringVal{StringVal: ipString}}
-	createTimePath := fmt.Sprintf("state/link[mac=%s]/create-time", macString)
+	createTimePath := fmt.Sprintf("state/host[mac=%s]/create-time", macString)
 	createTimeVal := &gnmi.TypedValue{Value: &gnmi.TypedValue_UintVal{UintVal: uint64(time.Now().UnixNano())}}
 
 	c.Root().AddPath(portPath, portVal)

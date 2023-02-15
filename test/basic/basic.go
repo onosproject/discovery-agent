@@ -96,7 +96,7 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 	assert.Equal(t, "201", resp.GetUpdate().Update[0].Path.Elem[1].Key["port"])
 
 	wg2 := sync.WaitGroup{}
-	wg2.Add(20) // setting counter to 20 (until all 20 hosts are found..)
+	wg2.Add(2) // setting counter to 2 (leafs)
 
 	for i, device := range dresp.Devices {
 		if strings.HasPrefix(string(device.GetID()), "leaf") {
@@ -223,8 +223,8 @@ func ValidateHostDiscovery(t *testing.T, id int) {
 	})
 	assert.NoError(t, err)
 
-	// Wait until we get 20 host updates (and 40 links updates, 60 updates in total)
-	for i := 0; i < 60; {
+	// Wait until we get 30 host updates (1 for port, 1 for IP address, 1 for create time)
+	for i := 0; i < 30; {
 		sresp, err1 := subClient.Recv()
 		assert.NoError(t, err1)
 		i += len(sresp.GetUpdate().Update)
@@ -240,5 +240,5 @@ func ValidateHostDiscovery(t *testing.T, id int) {
 
 	assert.NoError(t, err)
 	assert.Len(t, resp.Notification, 1)
-	assert.Len(t, resp.Notification[0].Update, 20) // 3 hosts
+	assert.Len(t, resp.Notification[0].Update, 10*3) // 10 hosts per leaf in total, 3 notification per host
 }
