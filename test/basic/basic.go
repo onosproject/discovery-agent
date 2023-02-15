@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -93,6 +94,19 @@ func (s *TestSuite) TestBasics(t *testing.T) {
 	resp, err = subClient.Recv() // Now get the addition notification
 	assert.NoError(t, err)
 	assert.Equal(t, "201", resp.GetUpdate().Update[0].Path.Elem[1].Key["port"])
+
+	wg2 := sync.WaitGroup{}
+	wg2.Add(2) // setting counter to 2 (leafs)
+
+	for i, device := range dresp.Devices {
+		if strings.HasPrefix(string(device.GetID()), "leaf") {
+			go func(id int) {
+				ValidateHostDiscovery(t, id)
+				wg2.Done()
+			}(i)
+		}
+	}
+	wg2.Wait()
 }
 
 // SetPipelineConfig applies the pipeline configuration to the specified device.
@@ -186,4 +200,45 @@ func CreateInsecureConnection(targetAaddress string) (*grpc.ClientConn, error) {
 	}
 
 	return conn, nil
+}
+
+// ValidateHostDiscovery validates that all hosts get discovered
+func ValidateHostDiscovery(t *testing.T, id int) {
+	t.Logf("Creating gNMI connection for agent %d", id)
+	gconn, err := CreateInsecureConnection(fmt.Sprintf("discovery-agent-%d.discovery-agent:30000", id))
+	assert.NoError(t, err)
+	gnmiClient := gnmi.NewGNMIClient(gconn)
+
+	t.Logf("%d: Subscribing for gNMI notifications...", id)
+	ctx := context.Background()
+	subClient, err := gnmiClient.Subscribe(ctx)
+	assert.NoError(t, err)
+	err = subClient.Send(&gnmi.SubscribeRequest{
+		Request: &gnmi.SubscribeRequest_Subscribe{
+			Subscribe: &gnmi.SubscriptionList{
+				Subscription:     []*gnmi.Subscription{{Path: utils.ToPath("state/host[mac=...]")}},
+				Mode:             gnmi.SubscriptionList_STREAM,
+				AllowAggregation: true,
+			}},
+	})
+	assert.NoError(t, err)
+
+	// Wait until we get 30 host updates (1 for port, 1 for IP address, 1 for create time)
+	for i := 0; i < 30; {
+		sresp, err1 := subClient.Recv()
+		assert.NoError(t, err1)
+		i += len(sresp.GetUpdate().Update)
+		//t.Logf("%d: Received update: %+v", id, sresp)
+	}
+
+	// Check basic queries to start
+	t.Logf("%d: Getting hosts via gNMI...", id)
+	resp, err := gnmiClient.Get(ctx, &gnmi.GetRequest{
+		Path: []*gnmi.Path{utils.ToPath("state/host[mac=...]")},
+	})
+	t.Logf("%d: Received get response: %+v", id, resp)
+
+	assert.NoError(t, err)
+	assert.Len(t, resp.Notification, 1)
+	assert.Len(t, resp.Notification[0].Update, 10*3) // 10 hosts per leaf in total, 3 notification per host
 }
