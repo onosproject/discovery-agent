@@ -224,7 +224,7 @@ func (c *Controller) updateHost(macString string, ipString string, port uint32) 
 			Port: port,
 		}
 		c.hosts[macString] = host
-		log.Infof("Added a new host: %s <- %s/%d", macString, ipString, port)
+		log.Infof("Added a new host: %s/%s <- %d", macString, ipString, port)
 		c.addHostToTree(macString, ipString, port)
 	}
 	host.LastUpdate = time.Now()
